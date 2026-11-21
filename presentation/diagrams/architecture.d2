@@ -1,4 +1,5 @@
 direction: right
+user: User {class: control}
 controller: "Controller" {
   class: boundary
   codex: "Codex\nShared context" {
@@ -10,19 +11,44 @@ controller: "Controller" {
 }
 targets: "Execution targets" {
   class: boundary
-  ssh: "SSH host\nPython REPL" {
-    class: target
+  ssh: "SSH host" {
+    class: boundary
     icon: https://deck-icons.invalid/linux.svg
+    repl: Python REPL {
+      class: target
+      width: 230
+      height: 54
+      icon: https://deck-icons.invalid/refresh-cw.svg
+      icon.near: center-left
+      label.near: center-center
+    }
   }
-  docker: "Docker container\nPython REPL" {
-    class: target
+  docker: "Docker container" {
+    class: boundary
     icon: https://deck-icons.invalid/docker.svg
+    repl: Node.js REPL {
+      class: target
+      width: 230
+      height: 54
+      icon: https://deck-icons.invalid/refresh-cw.svg
+      icon.near: center-left
+      label.near: center-center
+    }
   }
-  wsl: "WSL environment\nPython REPL" {
-    class: target
+  wsl: "WSL environment" {
+    class: boundary
     icon: https://deck-icons.invalid/wsl.svg
+    repl: Shell REPL {
+      class: target
+      width: 230
+      height: 54
+      icon: https://deck-icons.invalid/refresh-cw.svg
+      icon.near: center-left
+      label.near: center-center
+    }
   }
 }
+user -> controller.codex {class: transport}
 controller.sessions -> targets.ssh: SSH {class: transport}
 controller.sessions -> targets.docker: Docker {class: transport}
 controller.sessions -> targets.wsl: WSL {class: transport}

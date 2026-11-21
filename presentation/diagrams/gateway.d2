@@ -8,7 +8,14 @@ devices: "N edge devices" {
   arduino: Arduino boards {class: target}
   pi: Raspberry Pis {class: target}
 }
-gateway: "Unified gateway\nConfiguration · audit · access" {class: control}
+gateway: Unified gateway {
+  class: control
+  grid-columns: 1
+  grid-gap: 10
+  proxy: Network proxy {class: target}
+  llm: LLM gateway {class: target}
+  logs: Logs {class: target}
+}
 providers: "M providers and tools" {
   class: boundary
   grid-columns: 2

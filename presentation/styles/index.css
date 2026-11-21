@@ -95,21 +95,15 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--color-accent); 
 .reveal .equation .katex-display > .katex { text-align: left; }
 
 .memory-comparison .takeaway { margin: 0 0 18px; }
-.memory-footprint { display: grid; grid-template-columns: 2fr 3fr; gap: 28px; align-items: center; }
-.memory-footprint svg { width: 100%; fill: var(--color-text); font: 16px var(--font-presentation); }
-.memory-footprint table { margin: 0; font-size: 17px; font-variant-numeric: tabular-nums; }
-.memory-footprint :is(th, td) { padding: 6px 10px; }
-.memory-footprint :is(th, td):not(:first-child) { text-align: right; }
-.memory-swatch { display: inline-block; width: 11px; height: 11px; margin-right: 8px; }
-.memory-swatch-indigo { background: var(--tol-indigo); }
-.memory-swatch-wine { background: var(--tol-wine); }
-.memory-swatch-rose { background: var(--tol-rose); }
-.memory-swatch-teal { background: var(--tol-teal); }
-.memory-swatch-sand { background: var(--tol-sand); }
-
-.memory-swatch-purple { background: var(--tol-purple); }
-.memory-bar-label { fill: var(--color-on-primary); }
-
+.memory-footprint {
+  display: block;
+  width: 100%;
+  fill: var(--color-text);
+  font: 18px var(--font-presentation);
+}
+.memory-baseline { stroke: var(--tol-grey); }
+.memory-leader { fill: none; stroke: var(--color-primary); stroke-width: 1; }
+.memory-value { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .reveal .slides > section:has(.chapter-title) {
   padding-top: 216px;
@@ -131,4 +125,5 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--color-accent); 
   font: 20px var(--font-presentation);
 }
 .codex-bundle polyline { stroke: var(--color-primary); stroke-width: 1; fill: none; }
-.codex-bundle-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.codex-bundle-total { font-size: 31px; font-weight: 700; fill: var(--color-primary); }
+.codex-bundle-value { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }

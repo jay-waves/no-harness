@@ -18,7 +18,7 @@ This deck presents the proposed design and evaluation from proposal.md.
 # One gateway for many devices and providers
 
 <!-- diagram: gateway.d2 -->
-<!-- alt: Robots, Android phones, Arduino boards, and Raspberry Pis connect to one gateway for configuration, auditing, and access. The gateway connects to Codex, Claude Code, OpenCode, DeepSeek, and network proxy providers. -->
+<!-- alt: Robots, Android phones, Arduino boards, and Raspberry Pis connect to one unified gateway with three components: Network proxy, LLM gateway, and Logs. The gateway connects to Codex, Claude Code, OpenCode, DeepSeek, and network proxy providers. -->
 
 <p class="caption">One connection per device and provider gives N + M integrations instead of up to N × M pairings. Inspired by LLM gateways and network proxies such as Clash.</p>
 
@@ -45,9 +45,9 @@ Linux benchmark. Startup PSS is headless. Turn 64 is an interactive terminal che
 
 | Harness | Package footprint | Session storage | Memory |
 | --- | --- | --- | --- |
-| Grok Build | 199 MiB Linux executable | ≈50 MiB in one long session | No comparable figure found |
+| <img class="brand-icon" src="brand-icon:grok.svg" alt=""> Grok Build | 199 MiB Linux executable | ≈50 MiB in one long session | No comparable figure found |
 | <img class="brand-icon" src="brand-icon:deepseek.png" alt=""> DeepSeek Harness | 5.94 MiB unpacked main npm package | 193 KB per short fix | Web server, 470–700 MB RSS after restart |
-| HKUDS nanobot | 60.8 MB wheel, ≈161 MB unpacked | No per-turn figure found | Older gateway, ≈420 MB RSS |
+| <img class="brand-icon" src="brand-icon:nanobot.svg" alt=""> HKUDS nanobot | 60.8 MB wheel, ≈161 MB unpacked | No per-turn figure found | Older gateway, ≈420 MB RSS |
 
 Package figures exclude external dependencies. Web server RSS excludes the browser. npm describes distribution. Runtime memory can depend on Node.js, loaded dependencies, execution mode, and retained history.
 
@@ -78,7 +78,7 @@ The direct baseline can still reuse SSH connections and running containers, batc
 # A full agent in every target
 
 <!-- diagram: remote-agent.d2 -->
-<!-- alt: The operator connects to separate agents on SSH, Docker, and WSL targets. Each agent has its own context and Model API configuration. -->
+<!-- alt: The user connects to separate agents on SSH, Docker, and WSL targets. Each agent has its own context and Model API configuration. -->
 
 <p class="caption">Each installation has its own task context, tools, and model API configuration.</p>
 
@@ -87,18 +87,18 @@ The direct baseline can still reuse SSH connections and running containers, batc
 # Direct commands start new processes
 
 <!-- diagram: direct-execution.d2 -->
-<!-- alt: The local agent uses SSH, docker exec, and wsl --exec. In each target, the sum and mean run in separate processes that both load the data. -->
+<!-- alt: The user starts the local agent, which uses SSH, docker exec, and wsl --exec. Python commands on the SSH host, Node.js commands in Docker, and shell commands in WSL each start a fresh process. -->
 
-<p class="caption">Separate interpreter invocations reload the dataset to compute the sum and mean.</p>
+<p class="caption">Each command starts a fresh process. Later commands reload data they need again.</p>
 
 ---
 
-# Remote REPLs reuse the dataset
+# Remote REPLs keep state across calls
 
 <!-- diagram: architecture.d2 -->
-<!-- alt: Codex on the controller calls a session manager over MCP. The session manager uses SSH, Docker, and WSL to reach target workers that maintain Python REPLs. -->
+<!-- alt: The user starts Codex on the controller, and Codex calls a session manager over MCP. The illustrated targets run a Python REPL on the SSH host, a Node.js REPL in Docker, and a shell REPL in WSL. -->
 
-<p class="caption">The local agent receives the sum and mean. Each target keeps its own DataFrame.</p>
+<p class="caption">Each REPL keeps its own session state. The prototype supports Bash and Python. Node.js illustrates another runtime.</p>
 
 Notes:
 Model API access stays local. Workload traffic follows the target network. The profiles reuse target dependencies and available proxy or VPN connectivity. Code Mode can combine operations and keep large outputs available by handle.
@@ -154,14 +154,14 @@ Unpacked Linux x86-64 footprint. Codex 0.170.0 official musl bundle versus a str
 
 ---
 
-# What ships in the Codex CLI bundle
+# What takes up disk space on each target
 
 <!-- chart: codex-bundle -->
 
-<p class="caption">Unpacked disk footprint of the official Codex 0.170.0 Linux x86-64 musl bundle.</p>
+<p class="caption">Python worker baseline: Alpine rootfs (musl), BusyBox, and Python. The measured 49.77 MiB base also includes OpenSSH.</p>
 
 Notes:
-The bundle includes separate executables for the CLI, exec server, and Code Mode host. Voice libraries are included in the disk footprint. See the next slide for the sampled runtime memory.
+The large figures above the bars are payload increments. The Alpine layer is included in both stacks and drawn at the same scale. The Python worker needs an Alpine rootfs, BusyBox, and Python, alongside the worker executable. The SSH deployment additionally needs an SSH server. Unpacked official Codex 0.170.0 Linux x86-64 musl bundle versus the stripped static ssh-mcp worker. The voice shared libraries include GLib, GStreamer, Opus, and glibc. See the next slide for the sampled runtime memory.
 
 ---
 
@@ -169,7 +169,7 @@ The bundle includes separate executables for the CLI, exec server, and Code Mode
 
 <!-- chart: memory-footprint -->
 
-<p class="caption">Five samples per setup on Alpine. Codex exec awaits a local mock response. Both Python processes hold a 100,000-integer list. The worker runs Python inside its session.</p>
+<p class="caption">Median proportional set size (PSS), five samples per setup on Alpine with the same Python workload.</p>
 
 Notes:
 Values are median proportional set size (PSS) by component from Linux procfs. Codex file-backed pages and anonymous pages are measured separately. The executable mapping is the dominant named mapping, and its PSS overlaps the page categories shown here. The Codex-side Python process is a separately launched workload control. The stack totals sum component medians. Python excludes the separately shown musl mappings. The target bridge and daemon are separate processes. Neither sampled process tree contained Node.js, glibc, or a live shell process. Rootfs size is measured separately.
