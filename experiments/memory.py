@@ -14,13 +14,27 @@ class Model(BaseHTTPRequestHandler):
 def sample(pid):
  f=Path(f'/proc/{pid}/smaps_rollup').read_text()
  return int(next(x.split()[1] for x in f.splitlines() if x.startswith('Pss:')))
+def codex_breakdown(pid):
+ fields = {}
+ for line in Path(f'/proc/{pid}/smaps_rollup').read_text().splitlines():
+  key, _, value = line.partition(':')
+  if key in ('Pss', 'Pss_Anon', 'Pss_File'):
+   fields[key] = int(value.split()[0])
+ return {
+  'file_kib': fields['Pss_File'],
+  'anonymous_kib': fields['Pss_Anon'],
+  'other_kib': fields['Pss'] - fields['Pss_File'] - fields['Pss_Anon'],
+  'executable_mapping_kib': mapping_pss(pid, str(Path(f'/proc/{pid}/exe').readlink())),
+ }
 def libc(pid):
+ return mapping_pss(pid, 'ld-musl-')
+def mapping_pss(pid, name):
  total=0
- musl=False
+ matched=False
  for line in Path(f'/proc/{pid}/smaps').read_text().splitlines():
   if line and line[0] in '0123456789abcdef' and '-' in line.split()[0]:
-   musl = 'ld-musl-' in line
-  elif musl and line.startswith('Pss:'):
+   matched = name in line
+  elif matched and line.startswith('Pss:'):
    total += int(line.split()[1])
  return total
 def tree(pid):
@@ -47,7 +61,7 @@ if sys.argv[1]=='codex':
    py=subprocess.Popen(['python3','-c','import csv,time; values=list(range(1,100001)); time.sleep(30)'])
    try:
     time.sleep(.25)
-    print(json.dumps({'mode':'codex','components':rows(cli.pid)+rows(py.pid)}),flush=True)
+    print(json.dumps({'mode':'codex','components':rows(cli.pid)+rows(py.pid),'codex_breakdown':codex_breakdown(cli.pid)}),flush=True)
    finally: py.terminate(); py.wait()
   finally: cli.terminate(); cli.wait()
 else:

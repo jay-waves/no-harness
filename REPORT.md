@@ -6,7 +6,7 @@ Yu, Jiawei · 3036809907
 
 ## Abstract
 
-This project keeps the Codex CLI on a controller and moves execution to persistent Bash and Python sessions on remote targets. Three pilots measured execution latency, deployment size, and memory. In the three-turn CSV task, a persistent Python session parsed the input once and reduced total execution time from 113.98 ms to 61.02 ms, including session initialization. On Alpine, the worker added 9.17 MiB per target, compared with 478.09 MiB for the official standalone Codex bundle. At the sampled headless checkpoint, the worker-side processes used 22,883 KiB PSS, compared with 157,948 KiB for the Codex CLI and a matched Python workload on the target. Scripted checks covered file I/O, C compilation, CSV analysis, and SSH configuration.
+This project keeps the Codex CLI on a controller and moves execution to persistent Bash and Python sessions on remote targets. Three pilots measured execution latency, deployment size, and memory. In the three-turn CSV task, a persistent Python session parsed the input once and reduced total execution time from 113.98 ms to 61.02 ms, including session initialization. On Alpine, the worker added 9.17 MiB per target, compared with 478.09 MiB for the official standalone Codex bundle. At the sampled headless checkpoint, the worker-side processes used 22,733 KiB PSS, compared with 156,328 KiB for the Codex CLI and a matched Python workload on the target. Scripted checks covered file I/O, C compilation, CSV analysis, and SSH configuration.
 
 ## Project inspiration
 
@@ -129,18 +129,35 @@ The standalone bundle adds about **52 times** as many bytes as the worker. The m
 
 The direct path ran the fixed Python task scripts in the Codex-equipped environment, where `codex --version` confirmed startup. The worker path ran the same scripts through a persistent Python session and verified the version handshake, output status, and exit code. Docker carried the bridge over stdin and stdout with networking disabled. The tasks were scripted and there were no model calls. This measures deployment footprint and task execution prerequisites. Agent success rates, remote API connectivity, and SSH service startup remain outside this pilot.
 
+### Executables and shared libraries
+
+The official x86-64 musl bundle contains several executables. Inspection with `readelf` found no ELF interpreter or `DT_NEEDED` shared-library entries in the main Codex CLI, exec server, Code Mode host, bundled ripgrep, or bubblewrap. These are statically linked builds. The main binary alone returned its version on the pinned Alpine base image, and the full bundle ran the headless memory checkpoint on the Alpine Python/OpenSSH profile. [11]
+
+| Component in the Codex archive | Unpacked size | Runtime linkage |
+| --- | ---: | --- |
+| Main `codex` executable | 284.49 MiB | Static PIE |
+| `codex-exec-server` | 71.06 MiB | Static PIE |
+| `codex-code-mode-host` | 66.87 MiB | Static PIE |
+| Voice resources and helper | 50.01 MiB | Voice executable uses the glibc loader |
+| Bundled ripgrep and bubblewrap | 5.64 MiB | Static PIE |
+
+The voice directory includes **11.72 MiB** of shared libraries within its 50.01 MiB total. The voice executable references libraries such as GLib, GStreamer, Opus, and glibc. None of the voice processes appeared in the headless checkpoint. Both measured profiles already supplied the workload's shared native dependencies: Alpine's musl loader, `libpython3.12.so.1.0` for Python, and `libcrypto.so.3` for OpenSSH. The stripped Go worker itself was statically linked. The C build profile supplies the same compiler and musl development headers to both setups. Shared-library files count toward the installed footprint where they are shipped. They contribute to process PSS when their pages are resident.
+
 ### Headless CLI and worker memory
 
 On the Alpine Python/OpenSSH baseline, five fresh containers per configuration were sampled 250 ms after the checkpoint. The official standalone `codex exec` process waited for a response from a local scripted HTTP endpoint. A separate Python process held a list of 100,000 integers as a workload control. The worker opened a Python REPL through its bridge, loaded the same list, and retained it after the code block completed. Outbound networking was disabled. Measurements cover the selected processes and exclude the measurement driver, mock server, and kernel caches.
 
 | Component PSS | Codex CLI target | SSH worker target |
 | --- | ---: | ---: |
-| Codex CLI | 147,629 KiB | — |
-| SSH MCP bridge | — | 5,031 KiB |
-| SSH MCP worker | — | 6,455 KiB |
-| Python excluding musl mappings | 10,019 KiB | 11,101 KiB |
-| musl mappings | 300 KiB | 296 KiB |
-| **Stack total** | **157,948 KiB** | **22,883 KiB** |
+| Codex CLI, file-backed pages | 116,825 KiB | — |
+| Codex CLI, anonymous pages | 29,164 KiB | — |
+| SSH MCP bridge | — | 4,927 KiB |
+| SSH MCP worker | — | 6,421 KiB |
+| Python excluding musl mappings | 10,039 KiB | 11,085 KiB |
+| musl mappings | 300 KiB | 300 KiB |
+| **Stack total** | **156,328 KiB** | **22,733 KiB** |
+
+The file-backed pages in the Codex process account for **116,825 KiB of the 133,595 KiB difference**, or about **87%**. The standalone executable is the dominant named mapping. Its mappings account for **120,656 KiB PSS**, including some anonymous pages, so that figure overlaps the two Codex rows. Anonymous PSS can include heap, stack, and private copies of mapped pages. This measurement does not identify which Rust modules allocated it. The Python and musl figures are similar across targets.
 
 Process PSS comes from `/proc/<pid>/smaps_rollup`. The musl entries sum proportional shares for mappings backed by the musl loader in `/proc/<pid>/smaps`; those shares are subtracted from Python before stacking. Values are per-component medians across the five samples, and the stack total sums those medians. The observed process trees contained no Node.js or resident shell, and both targets used Alpine with musl. This is a single memory checkpoint under the documented conditions. The separately launched Python control and the persistent worker interpreter have slightly different resident footprints. The local Codex client is excluded from the worker target by design.
 
