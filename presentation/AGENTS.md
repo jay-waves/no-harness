@@ -34,4 +34,4 @@
 
 - Use --font-presentation (Georgia with serif fallbacks) throughout, including SVG labels.
 
-- Render Mermaid through Pele in React, with `<!-- diagram: name.mmd -->` references in `slides.md` to the shared root Mermaid files. Register only the diagram types in use, preserve mount cleanup, and map --pele-* variables to global palette/font aliases. Do not add Mermaid.js or a second diagram renderer. Keep every diagram legible within the slide and provide source disclosure.
+- Compile D2 diagrams in Vite and reference them with `<!-- diagram: name.d2 -->` in `slides.md`. Keep the deck diagram sources in `diagrams/`, preserve the proposal’s root Mermaid files, and keep diagrams legible and self-contained in both builds.

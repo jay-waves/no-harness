@@ -1,0 +1,29 @@
+direction: right
+agent: "Local agent\nShared context" {
+  class: control
+  icon: https://deck-icons.invalid/codex.svg
+}
+ssh: "SSH host" {
+  class: boundary
+  icon: https://deck-icons.invalid/linux.svg
+  first: "New process\nLoad data · sum" {class: target}
+  second: "New process\nReload data · mean" {class: target}
+  first -> second {class: transport}
+}
+docker: "Docker container" {
+  class: boundary
+  icon: https://deck-icons.invalid/docker.svg
+  first: "New process\nLoad data · sum" {class: target}
+  second: "New process\nReload data · mean" {class: target}
+  first -> second {class: transport}
+}
+wsl: "WSL environment" {
+  class: boundary
+  icon: https://deck-icons.invalid/wsl.svg
+  first: "New process\nLoad data · sum" {class: target}
+  second: "New process\nReload data · mean" {class: target}
+  first -> second {class: transport}
+}
+agent -> ssh.first: ssh {class: transport}
+agent -> docker.first: docker exec {class: transport}
+agent -> wsl.first: wsl --exec {class: transport}

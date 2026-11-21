@@ -64,25 +64,18 @@ html, body, #root { height: 100%; margin: 0; background: var(--color-background)
 .reveal section:has(.diagram) h1 { margin-bottom: 8px; }
 .reveal section:has(.diagram) .caption { margin: 8px 0 0; }
 .diagram {
-  --pele-bg: var(--color-background);
-  --pele-fg: var(--color-text);
-  --pele-fg-on-light: var(--color-text);
-  --pele-fg-on-dark: var(--color-on-primary);
-  --pele-muted: var(--color-text);
-  --pele-line: var(--color-primary);
-  --pele-surface: var(--color-background);
-  --pele-surface-alt: var(--color-unknown);
-  --pele-border: var(--color-accent);
-  --pele-accent: var(--color-primary);
-  --pele-critical: var(--color-danger);
-  --pele-error: var(--color-danger);
-  --pele-font: var(--font-presentation);
-  --pele-font-mono: var(--font-presentation);
-  --pele-radius: 0;
-  width: 100%; height: 420px;
-  display: flex; align-items: center; justify-content: center;
+  display: block;
+  width: 100%;
+  height: 388px;
+  object-fit: contain;
 }
-.diagram .pele { max-width: 100%; max-height: 100%; }
+.brand-icon {
+  width: 1em;
+  height: 1em;
+  margin-right: .35em;
+  vertical-align: -.14em;
+  object-fit: contain;
+}
 .deck-navigation { position: fixed; right: 20px; bottom: 16px; z-index: 40; display: flex; align-items: center; gap: 4px; padding: 3px 5px; background: var(--color-background); color: var(--color-primary); font: 13px var(--font-presentation); }
 .deck-navigation button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .deck-navigation button:hover:not(:disabled) { background: var(--color-unknown); }
@@ -101,10 +94,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--color-accent); 
 .reveal .equation .katex-display { margin: 0; text-align: left; }
 .reveal .equation .katex-display > .katex { text-align: left; }
 
-.memory-footprint { display: grid; grid-template-columns: 2fr 3fr; gap: 24px; align-items: center; }
+.memory-comparison .takeaway { margin: 0 0 18px; }
+.memory-footprint { display: grid; grid-template-columns: 2fr 3fr; gap: 28px; align-items: center; }
 .memory-footprint svg { width: 100%; fill: var(--color-text); font: 16px var(--font-presentation); }
 .memory-footprint table { margin: 0; font-size: 17px; font-variant-numeric: tabular-nums; }
-.memory-footprint :is(th, td) { padding: 8px 10px; }
+.memory-footprint :is(th, td) { padding: 6px 10px; }
 .memory-footprint :is(th, td):not(:first-child) { text-align: right; }
 .memory-swatch { display: inline-block; width: 11px; height: 11px; margin-right: 8px; }
 .memory-swatch-indigo { background: var(--tol-indigo); }
@@ -112,3 +106,29 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--color-accent); 
 .memory-swatch-rose { background: var(--tol-rose); }
 .memory-swatch-teal { background: var(--tol-teal); }
 .memory-swatch-sand { background: var(--tol-sand); }
+
+.memory-swatch-purple { background: var(--tol-purple); }
+.memory-bar-label { fill: var(--color-on-primary); }
+
+
+.reveal .slides > section:has(.chapter-title) {
+  padding-top: 216px;
+  padding-inline: 54px;
+  background: var(--color-primary);
+  border-top-width: 10px;
+}
+.reveal .chapter-title {
+  margin: 0;
+  color: var(--color-on-primary);
+  font-size: 82px;
+  line-height: 1;
+}
+
+.codex-bundle {
+  width: 100%;
+  height: 364px;
+  fill: var(--color-text);
+  font: 20px var(--font-presentation);
+}
+.codex-bundle polyline { stroke: var(--color-primary); stroke-width: 1; fill: none; }
+.codex-bundle-value { font-weight: 700; font-variant-numeric: tabular-nums; }

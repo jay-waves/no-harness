@@ -1,0 +1,38 @@
+direction: right
+devices: "N edge devices" {
+  class: boundary
+  grid-columns: 2
+  grid-gap: 10
+  robot: Robots {class: target}
+  phone: Android phones {class: target}
+  arduino: Arduino boards {class: target}
+  pi: Raspberry Pis {class: target}
+}
+gateway: "Unified gateway\nConfiguration · audit · access" {class: control}
+providers: "M providers and tools" {
+  class: boundary
+  grid-columns: 2
+  grid-gap: 10
+  codex: Codex {
+    class: target
+    icon: https://deck-icons.invalid/codex.svg
+  }
+  claude: Claude Code {
+    class: target
+    icon: https://deck-icons.invalid/claude-code.png
+  }
+  opencode: OpenCode {
+    class: target
+    icon: https://deck-icons.invalid/opencode.svg
+  }
+  deepseek: DeepSeek {
+    class: target
+    icon: https://deck-icons.invalid/deepseek.png
+  }
+  proxy: Network proxies {
+    class: target
+    icon: https://deck-icons.invalid/network.svg
+  }
+}
+devices -> gateway: N device connections {class: transport}
+gateway -> providers: M provider integrations {class: transport}

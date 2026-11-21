@@ -1,0 +1,24 @@
+direction: right
+user: "Operator" {class: control}
+ssh: "SSH host" {
+  class: boundary
+  icon: https://deck-icons.invalid/linux.svg
+  agent: "Full agent\nOwn context and API config" {class: target}
+}
+docker: "Docker container" {
+  class: boundary
+  icon: https://deck-icons.invalid/docker.svg
+  agent: "Full agent\nOwn context and API config" {class: target}
+}
+wsl: "WSL environment" {
+  class: boundary
+  icon: https://deck-icons.invalid/wsl.svg
+  agent: "Full agent\nOwn context and API config" {class: target}
+}
+api: "Model API" {class: control}
+user -> ssh.agent {class: transport}
+user -> docker.agent {class: transport}
+user -> wsl.agent {class: transport}
+ssh.agent -> api {class: transport; style.stroke-dash: 4}
+docker.agent -> api {class: transport; style.stroke-dash: 4}
+wsl.agent -> api {class: transport; style.stroke-dash: 4}

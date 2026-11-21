@@ -11,25 +11,52 @@ This deck presents the proposed design and evaluation from proposal.md.
 
 ---
 
+<h1 class="chapter-title">Background</h1>
+
+---
+
 # One gateway for many devices and providers
 
-<div class="split">
-<div>
-<h2>N edge devices</h2>
-<p>Robots, Android phones, Arduino boards, and Raspberry Pis.</p>
-</div>
-<div>
-<h2>M providers and integrations</h2>
-<p>DeepSeek, Claude Code, ChatGPT, and network proxy providers.</p>
-</div>
-</div>
+<!-- diagram: gateway.d2 -->
+<!-- alt: Robots, Android phones, Arduino boards, and Raspberry Pis connect to one gateway for configuration, auditing, and access. The gateway connects to Codex, Claude Code, OpenCode, DeepSeek, and network proxy providers. -->
 
-<p class="takeaway">Up to <strong>N × M</strong> device–provider configurations become <strong>N + M</strong> gateway integrations, with one place for configuration, audit logs, and access rules.</p>
-
-<p class="caption">Inspired by LLM gateways and network proxy gateways such as Clash.</p>
+<p class="caption">One connection per device and provider gives N + M integrations instead of up to N × M pairings. Inspired by LLM gateways and network proxies such as Clash.</p>
 
 Notes:
 The N + M model counts one integration per device and provider. The prototype currently targets Linux over SSH. Other devices and providers illustrate the motivation and would need appropriate adapters.
+
+---
+
+# Resource cost of three CLI harnesses
+
+| Harness | Install | PSS, start → 64 turns | Session data at 64 turns | Growth per turn |
+| --- | ---: | ---: | ---: | ---: |
+| <img class="brand-icon" src="brand-icon:claude-code.png" alt=""> Claude Code 2.1.327 | 356 MiB | 189 → 480 MiB | 23.1 MiB | 386 KiB |
+| <img class="brand-icon" src="brand-icon:codex.svg" alt=""> Codex 0.170.0 | 478 MiB | 121 → 438 MiB | 59.4 MiB | 875 KiB |
+| <img class="brand-icon" src="brand-icon:opencode.svg" alt=""> OpenCode 2.3.2 | 241 MiB | 350 → 691 MiB | 17.1 MiB | 145 KiB |
+
+Linux benchmark. Startup PSS is headless. Turn 64 is an interactive terminal checkpoint. Session growth is the net change from turns 4 to 64, including databases and logs.
+
+[Harness Resource Bench, Nov. 19, 2026](https://github.com/leonardcser/harness-resource-bench/tree/main/results/2026-11-19) · [Method](https://github.com/leonardcser/harness-resource-bench)
+
+---
+
+# Public data for three more harnesses
+
+| Harness | Package footprint | Session storage | Memory |
+| --- | --- | --- | --- |
+| Grok Build | 199 MiB Linux executable | ≈50 MiB in one long session | No comparable figure found |
+| <img class="brand-icon" src="brand-icon:deepseek.png" alt=""> DeepSeek Harness | 5.94 MiB unpacked main npm package | 193 KB per short fix | Web server, 470–700 MB RSS after restart |
+| HKUDS nanobot | 60.8 MB wheel, ≈161 MB unpacked | No per-turn figure found | Older gateway, ≈420 MB RSS |
+
+Package figures exclude external dependencies. Web server RSS excludes the browser. npm describes distribution. Runtime memory can depend on Node.js, loaded dependencies, execution mode, and retained history.
+
+Notes:
+Grok Build 1.0.92 executable size comes from the official Linux x86-64 release Content-Length. The long-session log is one issue report without a turn count. DeepSeek disk data is from 0.2.2-rc.5 and the Web memory case is from 0.2.2-rc.3. That case reported 2.0–2.1 GiB RSS plus swap after use, with a 68.6 MB compressed session. The nanobot wheel is 0.4.2 and the gateway RSS is from 0.1.5.post2. PSS apportions shared pages, while RSS counts them in full. These observations use different workloads and process boundaries.
+
+---
+
+<h1 class="chapter-title">Design</h1>
 
 ---
 
@@ -50,54 +77,17 @@ The direct baseline can still reuse SSH connections and running containers, batc
 
 # A full agent in every target
 
-<!-- diagram: remote-agent.mmd -->
+<!-- diagram: remote-agent.d2 -->
+<!-- alt: The operator connects to separate agents on SSH, Docker, and WSL targets. Each agent has its own context and Model API configuration. -->
 
 <p class="caption">Each installation has its own task context, tools, and model API configuration.</p>
 
 ---
 
-# Resource cost of three CLI harnesses
-
-| Harness | Install | PSS, start → 64 turns | Session data at 64 turns | Growth per turn |
-| --- | ---: | ---: | ---: | ---: |
-| Claude Code 2.1.327 | 356 MiB | 189 → 480 MiB | 23.1 MiB | 386 KiB |
-| Codex 0.170.0 | 478 MiB | 121 → 438 MiB | 59.4 MiB | 875 KiB |
-| OpenCode 2.3.2 | 241 MiB | 350 → 691 MiB | 17.1 MiB | 145 KiB |
-
-Linux benchmark. Startup PSS is headless. Turn 64 is an interactive terminal checkpoint. Session growth is the net change from turns 4 to 64, including databases and logs.
-
-[Harness Resource Bench, Nov. 19, 2026](https://github.com/leonardcser/harness-resource-bench/tree/main/results/2026-11-19) · [Method](https://github.com/leonardcser/harness-resource-bench)
-
----
-
-# Public data for three more harnesses
-
-| Harness | Package footprint | Session storage | Memory |
-| --- | --- | --- | --- |
-| Grok Build | 199 MiB Linux executable | ≈50 MiB in one long session | No comparable figure found |
-| DeepSeek Harness | 5.94 MiB unpacked main npm package | 193 KB per short fix | Web server, 470–700 MB RSS after restart |
-| HKUDS nanobot | 60.8 MB wheel, ≈161 MB unpacked | No per-turn figure found | Older gateway, ≈420 MB RSS |
-
-Package figures exclude external dependencies. Web server RSS excludes the browser. npm describes distribution. Runtime memory can depend on Node.js, loaded dependencies, execution mode, and retained history.
-
-Notes:
-Grok Build 1.0.92 executable size comes from the official Linux x86-64 release Content-Length. The long-session log is one issue report without a turn count. DeepSeek disk data is from 0.2.2-rc.5 and the Web memory case is from 0.2.2-rc.3. That case reported 2.0–2.1 GiB RSS plus swap after use, with a 68.6 MB compressed session. The nanobot wheel is 0.4.2 and the gateway RSS is from 0.1.5.post2. PSS apportions shared pages, while RSS counts them in full. These observations use different workloads and process boundaries.
-
----
-
-# Sources for public resource data
-
-- [Harness Resource Bench, run manifest and raw summary](https://github.com/leonardcser/harness-resource-bench/tree/main/results/2026-11-19)
-- [Session-Bench v1](https://jazzyalex.github.io/agent-sessions/blog/session-bench-v1/), two-prompt fix. Claude Code 113 KB, Codex 185 KB, DeepSeek 193 KB, OpenCode 235 KB.
-- Grok Build · [Linux release binary](https://x.ai/cli/grok-1.0.92-linux-x86_64) · [Session log report](https://github.com/farion1231/cc-switch/issues/6660)
-- DeepSeek Harness · [npm package metadata](https://registry.npmjs.org/@deepseek-ai/dsh/0.2.2-rc.5) · [Web server RSS report](https://github.com/deepseek-ai/deepseek-harness/discussions/13639)
-- HKUDS nanobot · [PyPI release files](https://pypi.org/project/nanobot-ai/0.4.2/#files) · [History storage](https://github.com/HKUDS/nanobot/blob/main/docs/memory.md) · [Gateway RSS profile](https://github.com/HKUDS/nanobot/issues/3410)
-
----
-
 # Direct commands start new processes
 
-<!-- diagram: direct-execution.mmd -->
+<!-- diagram: direct-execution.d2 -->
+<!-- alt: The local agent uses SSH, docker exec, and wsl --exec. In each target, the sum and mean run in separate processes that both load the data. -->
 
 <p class="caption">Separate interpreter invocations reload the dataset to compute the sum and mean.</p>
 
@@ -105,40 +95,13 @@ Grok Build 1.0.92 executable size comes from the official Linux x86-64 release C
 
 # Remote REPLs reuse the dataset
 
-<!-- diagram: architecture.mmd -->
+<!-- diagram: architecture.d2 -->
+<!-- alt: Codex on the controller calls a session manager over MCP. The session manager uses SSH, Docker, and WSL to reach target workers that maintain Python REPLs. -->
 
 <p class="caption">The local agent receives the sum and mean. Each target keeps its own DataFrame.</p>
 
 Notes:
 Model API access stays local. Workload traffic follows the target network. The profiles reuse target dependencies and available proxy or VPN connectivity. Code Mode can combine operations and keep large outputs available by handle.
-
----
-
-# Per-target deployment footprint
-
-| Unpacked footprint | Standalone Codex | SSH MCP worker |
-| --- | ---: | ---: |
-| Added to each target | **478.09 MiB** | **9.17 MiB** |
-| Total with Alpine, Python, and OpenSSH | 527.85 MiB | 58.94 MiB |
-| Total with the C toolchain | 714.89 MiB | 245.97 MiB |
-
-Four scripted checks passed through the worker. We read and wrote a file, compiled C, analyzed CSV data, and verified an SSH service configuration.
-
-<p class="caption">Both targets use the same task dependencies. Full Codex runs on the client in the worker design.</p>
-
-Notes:
-Unpacked Linux x86-64 footprint. Codex 0.170.0 official musl bundle versus a stripped static ssh-mcp 0.2.0 build. The bundle includes helpers and resources. The two task routes used deterministic scripts, without model inference. Codex startup was checked separately. Docker carried the worker bridge. See REPORT.md for the exact measurements and the official release link.
-
----
-
-# Headless CLI and worker memory
-
-<!-- chart: memory-footprint -->
-
-<p class="caption">Five samples per setup on Alpine. Codex exec awaits a local mock response. Both Python processes hold a 100,000-integer list. The worker runs Python inside its session.</p>
-
-Notes:
-Values are median proportional set size (PSS) by component from Linux procfs. The Codex-side Python process is a separately launched workload control. The stack totals sum component medians. Python excludes the separately shown musl mappings. The target bridge and daemon are separate processes. Neither sampled process tree contained Node.js, glibc, or a live shell process. Rootfs size is measured on the previous slide.
 
 ---
 
@@ -155,6 +118,61 @@ Codex calls a local MCP server. An SSH bridge forwards the request to a worker o
 
 Notes:
 The per-user worker owns the interpreter processes and listens on a private Unix socket. The SSH bridge can disconnect while the worker stays alive. Closing a session and opening a new one starts a fresh interpreter.
+
+---
+
+<h1 class="chapter-title">Experiments</h1>
+
+---
+
+# Persistent Python cuts repeated CSV work
+
+| Warm loopback SSH | CSV parses | Three turns, including a new REPL where applicable |
+| --- | ---: | ---: |
+| Exec once | 3 | 113.98 ms |
+| Bash REPL | 3 | 117.22 ms |
+| Python REPL | 1 | 61.02 ms |
+
+<p class="caption">Median of five trials per mode. All three used the same Python parser and calculations.</p>
+
+---
+
+# Per-target deployment footprint
+
+| Unpacked footprint | Standalone Codex | SSH MCP worker |
+| --- | ---: | ---: |
+| Added to each target | **478.09 MiB** | **9.17 MiB** |
+| Total with Alpine, Python, and OpenSSH | 527.85 MiB | 58.94 MiB |
+| Total with the C toolchain | 714.89 MiB | 245.97 MiB |
+
+Four scripted checks passed through the worker. We read and wrote a file, compiled C, analyzed CSV data, and verified an SSH service configuration.
+
+<p class="caption">The Codex bundle contains several static executables and optional voice libraries. Both targets use the same Alpine, Python, and task dependencies.</p>
+
+Notes:
+Unpacked Linux x86-64 footprint. Codex 0.170.0 official musl bundle versus a stripped static ssh-mcp 0.2.0 build. The Codex CLI, exec server, and Code Mode host are separate static binaries. The optional voice bundle includes 11.72 MiB of shared libraries and uses the glibc loader. The two task routes used deterministic scripts. Codex startup was checked separately. Docker carried the worker bridge. See REPORT.md for the executable and dependency breakdown.
+
+---
+
+# What ships in the Codex CLI bundle
+
+<!-- chart: codex-bundle -->
+
+<p class="caption">Unpacked disk footprint of the official Codex 0.170.0 Linux x86-64 musl bundle.</p>
+
+Notes:
+The bundle includes separate executables for the CLI, exec server, and Code Mode host. Voice libraries are included in the disk footprint. See the next slide for the sampled runtime memory.
+
+---
+
+# Where the memory difference comes from
+
+<!-- chart: memory-footprint -->
+
+<p class="caption">Five samples per setup on Alpine. Codex exec awaits a local mock response. Both Python processes hold a 100,000-integer list. The worker runs Python inside its session.</p>
+
+Notes:
+Values are median proportional set size (PSS) by component from Linux procfs. Codex file-backed pages and anonymous pages are measured separately. The executable mapping is the dominant named mapping, and its PSS overlaps the page categories shown here. The Codex-side Python process is a separately launched workload control. The stack totals sum component medians. Python excludes the separately shown musl mappings. The target bridge and daemon are separate processes. Neither sampled process tree contained Node.js, glibc, or a live shell process. Rootfs size is measured separately.
 
 ---
 
@@ -201,6 +219,10 @@ An inconclusive comparison leaves comparable quality unestablished.
 
 ---
 
+<h1 class="chapter-title">Conclusion</h1>
+
+---
+
 # Project contribution and related work
 
 **ssh-mcp** keeps Bash and Python sessions alive across SSH reconnects.
@@ -216,3 +238,14 @@ Three-turn CSV task **113.98 → 61.02 ms**. Worker deployment **9.17 MiB per ta
 
 Notes:
 The CSV pilot used warm loopback SSH. The deployment figures compare the worker with the full Codex CLI bundle. The proposal milestone refers to when the course idea took shape.
+
+---
+
+# References
+
+- [Harness Resource Bench, run manifest and raw summary](https://github.com/leonardcser/harness-resource-bench/tree/main/results/2026-11-19)
+- [Session-Bench v1](https://jazzyalex.github.io/agent-sessions/blog/session-bench-v1/), two-prompt fix. Claude Code 113 KB, Codex 185 KB, DeepSeek 193 KB, OpenCode 235 KB.
+- Grok Build · [Linux release binary](https://x.ai/cli/grok-1.0.92-linux-x86_64) · [Session log report](https://github.com/farion1231/cc-switch/issues/6660)
+- DeepSeek Harness · [npm package metadata](https://registry.npmjs.org/@deepseek-ai/dsh/0.2.2-rc.5) · [Web server RSS report](https://github.com/deepseek-ai/deepseek-harness/discussions/13639)
+- HKUDS nanobot · [PyPI release files](https://pypi.org/project/nanobot-ai/0.4.2/#files) · [History storage](https://github.com/HKUDS/nanobot/blob/main/docs/memory.md) · [Gateway RSS profile](https://github.com/HKUDS/nanobot/issues/3410)
+- Remote execution · [Codex 0.170.0](https://github.com/openai/codex/releases/tag/rust-v0.170.0) · [DeepSeek Harness SSH subsystem](https://github.com/deepseek-ai/deepseek-harness/blob/2e39e70496aa02986ca6a820c5d497e816b69d7e/docs/subsystems/ssh.md)

@@ -1,0 +1,28 @@
+direction: right
+controller: "Controller" {
+  class: boundary
+  codex: "Codex\nShared context" {
+    class: control
+    icon: https://deck-icons.invalid/codex.svg
+  }
+  sessions: "Session manager" {class: control}
+  codex -> sessions: MCP {class: transport}
+}
+targets: "Execution targets" {
+  class: boundary
+  ssh: "SSH host\nPython REPL" {
+    class: target
+    icon: https://deck-icons.invalid/linux.svg
+  }
+  docker: "Docker container\nPython REPL" {
+    class: target
+    icon: https://deck-icons.invalid/docker.svg
+  }
+  wsl: "WSL environment\nPython REPL" {
+    class: target
+    icon: https://deck-icons.invalid/wsl.svg
+  }
+}
+controller.sessions -> targets.ssh: SSH {class: transport}
+controller.sessions -> targets.docker: Docker {class: transport}
+controller.sessions -> targets.wsl: WSL {class: transport}
