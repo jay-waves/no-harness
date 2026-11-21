@@ -18,7 +18,7 @@ This deck presents the proposed design and evaluation from proposal.md.
 # One gateway for many devices and providers
 
 <!-- diagram: gateway.d2 -->
-<!-- alt: Robots, Android phones, Arduino boards, and Raspberry Pis connect to one unified gateway with three components: Network proxy, LLM gateway, and Logs. The gateway connects to Codex, Claude Code, OpenCode, DeepSeek, and network proxy providers. -->
+<!-- alt: A robot rover, Android phone, Arduino board, and Raspberry Pi each connect directly to one unified gateway with three components: Network proxy, LLM gateway, and Logs. The gateway connects to Codex, Claude Code, Qwen, DeepSeek, and Gemini. -->
 
 <p class="caption">One connection per device and provider gives N + M integrations instead of up to N × M pairings. Inspired by LLM gateways and network proxies such as Clash.</p>
 
@@ -27,32 +27,21 @@ The N + M model counts one integration per device and provider. The prototype cu
 
 ---
 
-# Resource cost of three CLI harnesses
+# What agent harnesses cost
 
-| Harness | Install | PSS, start → 64 turns | Session data at 64 turns | Growth per turn |
-| --- | ---: | ---: | ---: | ---: |
-| <img class="brand-icon" src="brand-icon:claude-code.png" alt=""> Claude Code 2.1.327 | 356 MiB | 189 → 480 MiB | 23.1 MiB | 386 KiB |
-| <img class="brand-icon" src="brand-icon:codex.svg" alt=""> Codex 0.170.0 | 478 MiB | 121 → 438 MiB | 59.4 MiB | 875 KiB |
-| <img class="brand-icon" src="brand-icon:opencode.svg" alt=""> OpenCode 2.3.2 | 241 MiB | 350 → 691 MiB | 17.1 MiB | 145 KiB |
+| Harness | Install footprint | Typical RSS |
+| --- | ---: | ---: |
+| <img class="brand-icon" src="brand-icon:claude-code.png" alt=""> Claude Code | 356 MiB | 310.9 MB |
+| <img class="brand-icon" src="brand-icon:codex.svg" alt=""> Codex | 478 MiB | 123.4 MB |
+| <img class="brand-icon" src="brand-icon:opencode.svg" alt=""> OpenCode | 241 MiB | 576.1 MB |
+| <img class="brand-icon" src="brand-icon:grok.svg" alt=""> Grok Build | 199 MiB | 96.7 MB |
+| <img class="brand-icon" src="brand-icon:deepseek.png" alt=""> DeepSeek Harness | 5.94 MiB | 185.6 MB |
+| <img class="brand-icon" src="brand-icon:nanobot.svg" alt=""> HKUDS nanobot | ≈161 MB | ≈420 MB |
 
-Linux benchmark. Startup PSS is headless. Turn 64 is an interactive terminal checkpoint. Session growth is the net change from turns 4 to 64, including databases and logs.
-
-[Harness Resource Bench, Nov. 19, 2026](https://github.com/leonardcser/harness-resource-bench/tree/main/results/2026-11-19) · [Method](https://github.com/leonardcser/harness-resource-bench)
-
----
-
-# Public data for three more harnesses
-
-| Harness | Package footprint | Session storage | Memory |
-| --- | --- | --- | --- |
-| <img class="brand-icon" src="brand-icon:grok.svg" alt=""> Grok Build | 199 MiB Linux executable | ≈50 MiB in one long session | No comparable figure found |
-| <img class="brand-icon" src="brand-icon:deepseek.png" alt=""> DeepSeek Harness | 5.94 MiB unpacked main npm package | 193 KB per short fix | Web server, 470–700 MB RSS after restart |
-| <img class="brand-icon" src="brand-icon:nanobot.svg" alt=""> HKUDS nanobot | 60.8 MB wheel, ≈161 MB unpacked | No per-turn figure found | Older gateway, ≈420 MB RSS |
-
-Package figures exclude external dependencies. Web server RSS excludes the browser. npm describes distribution. Runtime memory can depend on Node.js, loaded dependencies, execution mode, and retained history.
+<p class="caption">RSS uses macOS CLI process-tree means and a Linux nanobot gateway measurement. Install figures use Linux images or unpacked packages, with different versions and scopes.</p>
 
 Notes:
-Grok Build 1.0.92 executable size comes from the official Linux x86-64 release Content-Length. The long-session log is one issue report without a turn count. DeepSeek disk data is from 0.2.2-rc.5 and the Web memory case is from 0.2.2-rc.3. That case reported 2.0–2.1 GiB RSS plus swap after use, with a 68.6 MB compressed session. The nanobot wheel is 0.4.2 and the gateway RSS is from 0.1.5.post2. PSS apportions shared pages, while RSS counts them in full. These observations use different workloads and process boundaries.
+Install figures for Claude Code 2.1.327, Codex 0.170.0, and OpenCode 2.3.2 are image increments from Harness Resource Bench. Grok Build 1.0.92 is the Linux executable. DeepSeek 0.2.2-rc.5 is the main npm package alone. nanobot 0.4.2 is the unpacked wheel. Harness Perf Benchmark reports mean RSS for Claude Code 2.1.277, Codex 0.155.1, OpenCode v2 2.0.10, Grok Build 1.0.41, and DeepSeek 0.1.5-rc.2. Grok and OpenCode ran in separate benchmark batches. The nanobot gateway measurement is from 0.1.5.post2.
 
 ---
 
@@ -244,6 +233,7 @@ The CSV pilot used warm loopback SSH. The deployment figures compare the worker 
 # References
 
 - [Harness Resource Bench, run manifest and raw summary](https://github.com/leonardcser/harness-resource-bench/tree/main/results/2026-11-19)
+- [Harness Perf Benchmark, process-tree RSS results](https://github.com/KonghaYao/harness-perf-benchmark#benchmark-results)
 - [Session-Bench v1](https://jazzyalex.github.io/agent-sessions/blog/session-bench-v1/), two-prompt fix. Claude Code 113 KB, Codex 185 KB, DeepSeek 193 KB, OpenCode 235 KB.
 - Grok Build · [Linux release binary](https://x.ai/cli/grok-1.0.92-linux-x86_64) · [Session log report](https://github.com/farion1231/cc-switch/issues/6660)
 - DeepSeek Harness · [npm package metadata](https://registry.npmjs.org/@deepseek-ai/dsh/0.2.2-rc.5) · [Web server RSS report](https://github.com/deepseek-ai/deepseek-harness/discussions/13639)

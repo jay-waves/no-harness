@@ -1,22 +1,35 @@
 direction: right
-devices: "N edge devices" {
-  class: boundary
-  grid-columns: 2
-  grid-gap: 10
-  robot: Robots {class: target}
-  phone: Android phones {class: target}
-  arduino: Arduino boards {class: target}
-  pi: Raspberry Pis {class: target}
+robot: "Robot rover" {
+  class: edge-device
+  icon: https://deck-icons.invalid/rover.svg
+}
+phone: "Android phone" {
+  class: edge-device
+  icon: https://deck-icons.invalid/android-phone.svg
+}
+arduino: "Arduino" {
+  class: edge-device
+  icon: https://deck-icons.invalid/arduino.svg
+}
+pi: "Raspberry Pi" {
+  class: edge-device
+  icon: https://deck-icons.invalid/raspberry-pi.svg
 }
 gateway: Unified gateway {
   class: control
   grid-columns: 1
   grid-gap: 10
-  proxy: Network proxy {class: target}
+  proxy: Network proxy {
+    class: target
+    width: 260
+    icon: https://deck-icons.invalid/clash-verge.png
+    icon.near: center-left
+    label.near: center-center
+  }
   llm: LLM gateway {class: target}
   logs: Logs {class: target}
 }
-providers: "M providers and tools" {
+providers: "LLM providers" {
   class: boundary
   grid-columns: 2
   grid-gap: 10
@@ -28,18 +41,21 @@ providers: "M providers and tools" {
     class: target
     icon: https://deck-icons.invalid/claude-code.png
   }
-  opencode: OpenCode {
+  qwen: Qwen {
     class: target
-    icon: https://deck-icons.invalid/opencode.svg
+    icon: https://deck-icons.invalid/qwen.svg
   }
   deepseek: DeepSeek {
     class: target
     icon: https://deck-icons.invalid/deepseek.png
   }
-  proxy: Network proxies {
+  gemini: Gemini {
     class: target
-    icon: https://deck-icons.invalid/network.svg
+    icon: https://deck-icons.invalid/gemini.svg
   }
 }
-devices -> gateway: N device connections {class: transport}
-gateway -> providers: M provider integrations {class: transport}
+robot -> gateway {class: transport}
+phone -> gateway {class: transport}
+arduino -> gateway {class: transport}
+pi -> gateway {class: transport}
+gateway -> providers: M provider APIs {class: transport}

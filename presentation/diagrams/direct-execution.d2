@@ -7,22 +7,64 @@ agent: "Local agent\nShared context" {
 ssh: "SSH host" {
   class: boundary
   icon: https://deck-icons.invalid/linux.svg
-  first: "Python command\nNew process" {class: target}
-  second: "Python command\nNew process" {class: target}
+  first: "Python command\nNew process" {
+    class: target
+    width: 255
+    height: 64
+    icon: https://deck-icons.invalid/python.svg
+    icon.near: center-left
+    label.near: center-right
+  }
+  second: "Python command\nNew process" {
+    class: target
+    width: 255
+    height: 64
+    icon: https://deck-icons.invalid/python.svg
+    icon.near: center-left
+    label.near: center-right
+  }
   first -> second {class: transport}
 }
 docker: "Docker container" {
   class: boundary
   icon: https://deck-icons.invalid/docker.svg
-  first: "Node.js command\nNew process" {class: target}
-  second: "Node.js command\nNew process" {class: target}
+  first: "Node.js command\nNew process" {
+    class: target
+    width: 255
+    height: 64
+    icon: https://deck-icons.invalid/nodejs.svg
+    icon.near: center-left
+    label.near: center-right
+  }
+  second: "Node.js command\nNew process" {
+    class: target
+    width: 255
+    height: 64
+    icon: https://deck-icons.invalid/nodejs.svg
+    icon.near: center-left
+    label.near: center-right
+  }
   first -> second {class: transport}
 }
 wsl: "WSL environment" {
   class: boundary
   icon: https://deck-icons.invalid/wsl.svg
-  first: "Shell command\nNew process" {class: target}
-  second: "Shell command\nNew process" {class: target}
+  first: "Shell command\nNew process" {
+    class: target
+    width: 255
+    height: 64
+    icon: https://deck-icons.invalid/bash.svg
+    icon.near: center-left
+    label.near: center-right
+  }
+  second: "Shell command\nNew process" {
+    class: target
+    width: 255
+    height: 64
+    icon: https://deck-icons.invalid/bash.svg
+    icon.near: center-left
+    label.near: center-right
+  }
   first -> second {class: transport}
 }
 user -> agent {class: transport}
