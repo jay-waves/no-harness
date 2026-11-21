@@ -1,0 +1,18 @@
+flowchart LR
+    A["One local agent<br/>Shared context and API config"] --> B["Code Mode session manager<br/>Selected results enter context"]
+    subgraph SSH[SSH host]
+        S["Thin worker and live REPL<br/>Turn 1: load df; sum<br/>Turn 2: reuse df; mean"]
+    end
+    subgraph Docker[Docker container]
+        D["Thin worker and live REPL<br/>Turn 1: load df; sum<br/>Turn 2: reuse df; mean"]
+    end
+    subgraph WSL[WSL environment]
+        W["Thin worker and live REPL<br/>Turn 1: load df; sum<br/>Turn 2: reuse df; mean"]
+    end
+    B -->|Reuse session| S
+    B -->|Reuse session| D
+    B -->|Reuse session| W
+    classDef local fill:#e8eef7,stroke:#49658a,color:#172b45
+    classDef runtime fill:#edf4ef,stroke:#52755d,color:#223c2a
+    class A,B local
+    class S,D,W runtime

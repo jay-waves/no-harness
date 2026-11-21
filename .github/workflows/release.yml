@@ -14,11 +14,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv sync --locked --python 3.11
-      - run: uv run --locked python -m unittest discover -s tests
-      - run: uv run --locked python tests/smoke.py
-      - run: uv build
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -26,15 +21,16 @@ jobs:
           cache-dependency-path: presentation/package-lock.json
       - run: npm ci --prefix presentation
       - run: npm run typecheck --prefix presentation
-      - run: npm run build --prefix presentation
       - run: npm run build:single --prefix presentation
       - name: Stage standalone presentation
-        run: cp presentation/dist-single/index.html dist/loopguard-presentation.html
+        run: |
+          mkdir -p dist
+          cp presentation/dist-single/index.html dist/remote-repl-presentation.html
       - name: Generate release checksums
         working-directory: dist
-        run: sha256sum *.whl *.tar.gz loopguard-presentation.html > SHA256SUMS
+        run: sha256sum remote-repl-presentation.html > SHA256SUMS
       - env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/* --verify-tag --generate-notes
+        run: gh release create "$TAG" dist/remote-repl-presentation.html dist/SHA256SUMS --verify-tag --generate-notes

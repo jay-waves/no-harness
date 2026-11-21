@@ -4,14 +4,30 @@ permissions:
   contents: read
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: presentation
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv sync --locked --python 3.11
-      - run: uv run --locked python -m unittest discover -s tests
-      - run: uv run --locked python tests/smoke.py
-      - run: uv build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: presentation/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:single
+  ssh-mcp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ssh-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ssh-mcp/go.mod
+          cache-dependency-path: ssh-mcp/go.sum
+      - run: go test -mod=readonly ./...
+      - run: go vet -mod=readonly ./...

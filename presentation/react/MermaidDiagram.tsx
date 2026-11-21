@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { mount, register } from 'pele/core'
 import flowchart from 'pele/diagrams/flowchart'
-import sequence from 'pele/diagrams/sequence'
 
-register(flowchart, sequence)
+register(flowchart)
 
 export function MermaidDiagram({ source }: { source: string }) {
   const host = useRef<HTMLDivElement>(null)

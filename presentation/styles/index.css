@@ -48,7 +48,7 @@ html, body, #root { height: 100%; margin: 0; background: var(--color-background)
 .reveal .split > div + div { border-left: 1px solid var(--color-border); padding-left: 32px; }
 .reveal .split h2 { padding-top: 10px; border-top: 2px solid var(--color-accent); margin-bottom: 20px; }
 .reveal .split p { font-size: 23px; }
-.reveal .equation { color: var(--color-primary); font-size: 27px; line-height: 1.65; padding: 15px 0; margin: 18px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+.reveal .equation { color: var(--color-primary); font-size: 23px; line-height: 1.4; padding: 15px 0; margin: 18px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
 .reveal sub { font-size: .65em; }
 .reveal .closing-lines { margin: 34px 0; }
 .reveal .closing-lines p { font-size: 26px; margin: 25px 0; }
@@ -99,3 +99,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px soli
 .reveal .slides > section:first-child :is(h1,h2,.eyebrow) { color: var(--color-on-primary); }
 .reveal .slides > section:nth-last-child(2) { background: var(--color-primary); color: var(--color-on-primary); }
 .reveal .slides > section:nth-last-child(2) :is(h1,.eyebrow,.closing-lines span) { color: var(--color-on-primary); }
+
+/* KaTeX owns math fonts and metrics; prose retains Georgia. */
+.reveal .equation .katex { font-size: 1em; }
+.reveal .equation .katex-display { margin: 0; text-align: left; }
+.reveal .equation .katex-display > .katex { text-align: left; }

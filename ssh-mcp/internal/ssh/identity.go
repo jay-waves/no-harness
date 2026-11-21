@@ -1,0 +1,169 @@
+package ssh
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+	"sync"
+
+	cryptossh "golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+)
+
+func (c *connectionConfig) agentSigners(ctx context.Context) ([]cryptossh.Signer, io.Closer, error) {
+	address := c.get("identityagent")
+	if address == "none" {
+		return nil, nil, nil
+	}
+	if strings.HasPrefix(address, "$") && !strings.HasPrefix(address, "${") {
+		name := strings.TrimPrefix(address, "$")
+		address = environment(c.options.Environment, name)
+		if address == "" {
+			return nil, nil, fmt.Errorf("IdentityAgent environment variable %s is unset or empty", name)
+		}
+	}
+	if address == "" || address == "SSH_AUTH_SOCK" {
+		address = environment(c.options.Environment, "SSH_AUTH_SOCK")
+	}
+	if address == "" {
+		address = defaultAgent()
+	}
+	if address == "" {
+		return nil, nil, nil
+	}
+	address, err := c.expand(address)
+	if err != nil {
+		return nil, nil, err
+	}
+	conn, err := connectAgent(ctx, address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("SSH agent unavailable: %w", err)
+	}
+	closeConn := sync.OnceValue(conn.Close)
+	stop := context.AfterFunc(ctx, func() { _ = closeConn() })
+	lease := agentLease(func() error { stop(); return closeConn() })
+	signers, err := agent.NewClient(conn).Signers()
+	if err != nil {
+		lease.Close()
+		return nil, nil, err
+	}
+	return signers, lease, nil
+}
+
+type agentLease func() error
+
+func (c agentLease) Close() error { return c() }
+
+func publicIdentity(path string) cryptossh.PublicKey {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	key, _, _, _, err := cryptossh.ParseAuthorizedKey(data)
+	if err != nil {
+		return nil
+	}
+	return key
+}
+
+// privateIdentities loads unencrypted IdentityFile keys for noninteractive use.
+func (c *connectionConfig) privateIdentities() ([]cryptossh.Signer, error) {
+	var signers []cryptossh.Signer
+	var failures []error
+	for _, name := range c.values["identityfile"] {
+		if name == "none" {
+			continue
+		}
+		path, err := c.expand(name)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		info, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+			failures = append(failures, fmt.Errorf("identity file %s must be a private regular file", path))
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		signer, err := cryptossh.ParsePrivateKey(data)
+		clear(data)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("identity file %s: %w", path, err))
+			continue
+		}
+		signers = append(signers, signer)
+	}
+	return signers, errors.Join(failures...)
+}
+
+func (c *connectionConfig) publicIdentities() (map[string]bool, []*cryptossh.Certificate, error) {
+	var certificates []*cryptossh.Certificate
+	allowed := map[string]bool{}
+	var failures []error
+	var missing []string
+	remember := func(key cryptossh.PublicKey) {
+		if key == nil {
+			return
+		}
+		id := string(key.Marshal())
+		if allowed[id] {
+			return
+		}
+		allowed[id] = true
+		if cert, ok := key.(*cryptossh.Certificate); ok {
+			certificates = append(certificates, cert)
+			allowed[string(cert.Key.Marshal())] = true
+		}
+	}
+	for _, name := range c.values["identityfile"] {
+		if name == "none" {
+			continue
+		}
+		path, err := c.expand(name)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		public := publicIdentity(path + ".pub")
+		remember(public)
+		remember(publicIdentity(path + "-cert.pub"))
+		key := publicIdentity(path)
+		remember(key)
+		if key == nil && public == nil {
+			missing = append(missing, path+".pub (load the private key with ssh-add)")
+		}
+	}
+	for _, name := range c.values["certificatefile"] {
+		if name == "none" {
+			continue
+		}
+		path, err := c.expand(name)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		remember(publicIdentity(path))
+	}
+	if len(allowed) == 0 && len(failures) == 0 {
+		if len(missing) > 0 {
+			failures = append(failures, fmt.Errorf("IdentityFile not found: %s", strings.Join(missing, ", ")))
+		} else {
+			failures = append(failures, fmt.Errorf("no IdentityFile configured"))
+		}
+	}
+	return allowed, certificates, errors.Join(failures...)
+}

@@ -1,0 +1,22 @@
+flowchart LR
+    U[User] --> A
+    U --> B
+    U --> C
+    subgraph SSH[SSH host]
+        A["Full agent<br/>Own context and API config"] --> AT[Local tools and files]
+    end
+    subgraph Docker[Docker container]
+        B["Full agent<br/>Own context and API config"] --> BT[Local tools and files]
+    end
+    subgraph WSL[WSL environment]
+        C["Full agent<br/>Own context and API config"] --> CT[Local tools and files]
+    end
+    A -. Model requests .-> M[Model API]
+    B -. Model requests .-> M
+    C -. Model requests .-> M
+    classDef local fill:#e8eef7,stroke:#49658a,color:#172b45
+    classDef agent fill:#f6eee8,stroke:#94745b,color:#473323
+    classDef runtime fill:#edf4ef,stroke:#52755d,color:#223c2a
+    class U,M local
+    class A,B,C agent
+    class AT,BT,CT runtime

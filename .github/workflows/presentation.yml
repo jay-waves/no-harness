@@ -6,12 +6,14 @@ on:
     paths:
       - 'presentation/**'
       - '.github/workflows/presentation.yml'
-      - 'PROPOSAL.md'
+      - 'proposal.md'
+      - '*.mmd'
   pull_request:
     paths:
       - 'presentation/**'
       - '.github/workflows/presentation.yml'
-      - 'PROPOSAL.md'
+      - 'proposal.md'
+      - '*.mmd'
   workflow_dispatch:
 
 permissions:
