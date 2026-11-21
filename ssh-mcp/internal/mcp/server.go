@@ -78,7 +78,7 @@ type Backend interface {
 }
 
 func New(version string, b Backend) *sdk.Server {
-	s := sdk.NewServer(&sdk.Implementation{Name: "ssh-mcp", Version: version}, nil)
+	s := sdk.NewServer(&sdk.Implementation{Name: "one", Version: version}, nil)
 	sdk.AddTool(s, &sdk.Tool{Name: "session_open", Description: "Open a persistent Bash (default) or Python session and report remote system/runtime details."}, func(ctx context.Context, _ *sdk.CallToolRequest, in OpenInput) (*sdk.CallToolResult, Session, error) {
 		if err := validateHost(in.Host); err != nil {
 			return nil, Session{}, err

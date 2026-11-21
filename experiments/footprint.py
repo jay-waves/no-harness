@@ -32,9 +32,9 @@ for name, code in tasks:
     docker("run","--rm","--network","none","-v",f"{root}/codex-package:/opt/codex:ro,Z",base,"python3","-c",task_prefix+code)
     print("direct",name,"PASS",flush=True)
 name = f"no-harness-footprint-{uuid.uuid4().hex[:12]}"
-docker("run","--rm","-d","--name",name,"--network","none","-v",f"{root/'ssh-mcp'}:/usr/local/bin/ssh-mcp:ro,Z",base,"sleep","300",stdout=subprocess.DEVNULL)
+docker("run","--rm","-d","--name",name,"--network","none","-v",f"{root/'one'}:/usr/local/bin/one:ro,Z",base,"sleep","300",stdout=subprocess.DEVNULL)
 try:
-    with subprocess.Popen(["docker","exec","-i",name,"ssh-mcp","bridge"],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True) as worker:
+    with subprocess.Popen(["docker","exec","-i",name,"one","bridge"],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True) as worker:
         info = part(worker, method="hello", protocol=1)
         print("worker handshake",info,flush=True)
         session = part(worker, method="open", open={"host":"container","runtime":"python"})["session"]["id"]

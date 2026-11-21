@@ -127,3 +127,4 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--color-accent); 
 .codex-bundle polyline { stroke: var(--color-primary); stroke-width: 1; fill: none; }
 .codex-bundle-total { font-size: 31px; font-weight: 700; fill: var(--color-primary); }
 .codex-bundle-value { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.codex-bundle-os { font-size: 15px; }

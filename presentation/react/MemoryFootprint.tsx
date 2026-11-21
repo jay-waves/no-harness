@@ -4,12 +4,12 @@ import { Bar } from '@visx/shape'
 const components = [
   { label: 'File-backed Codex pages', color: 'indigo', kib: [116825, 0] },
   { label: 'Anonymous Codex pages', color: 'purple', kib: [29164, 0] },
-  { label: 'SSH MCP bridge', color: 'wine', kib: [0, 4927] },
-  { label: 'SSH MCP worker', color: 'rose', kib: [0, 6421] },
-  { label: 'Python (excl. musl)', color: 'teal', kib: [10039, 11085] },
-  { label: 'musl', color: 'sand', kib: [300, 300] },
+  { label: '∅ne bridge', color: 'wine', kib: [0, 4927] },
+  { label: '∅ne worker', color: 'rose', kib: [0, 6421] },
+  { label: 'Python', color: 'teal', kib: [10039, 11085] },
+  { label: 'libc', color: 'sand', kib: [300, 300] },
 ]
-const modes = ['Codex CLI target', 'SSH worker target']
+const modes = ['Codex CLI target', '∅ne worker target']
 const totals = modes.map((_, index) => components.reduce((sum, row) => sum + row.kib[index], 0))
 const gap = totals[0] - totals[1]
 const fileShare = Math.round(100 * components[0].kib[0] / gap)

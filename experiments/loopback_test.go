@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jay-waves/comp7607a/ssh-mcp/internal/mcp"
-	"github.com/jay-waves/comp7607a/ssh-mcp/internal/sshtest"
+	"github.com/jay-waves/comp7607a/one/internal/mcp"
+	"github.com/jay-waves/comp7607a/one/internal/sshtest"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	cryptossh "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -55,7 +55,7 @@ func TestExecutionPilot(t *testing.T) {
 		t.Fatal("NO_HARNESS_PILOT_OUTPUT must name the results file")
 	}
 	root := t.TempDir()
-	bin := filepath.Join(root, "ssh-mcp")
+	bin := filepath.Join(root, "one")
 	if out, e := exec.Command("go", "build", "-buildvcs=false", "-o", bin, ".").CombinedOutput(); e != nil {
 		t.Fatalf("build: %v %s", e, out)
 	}
@@ -83,7 +83,7 @@ func TestExecutionPilot(t *testing.T) {
 	}
 	env := append(os.Environ(), "XDG_CACHE_HOME="+filepath.Join(root, "cache"))
 	script := filepath.Join(root, "remote")
-	body := "#!/bin/sh\n[ \"$1\" = -- ] && shift\n[ \"$1\" = fixture ] && shift\nif [ \"$1\" = 'ssh-mcp bridge' ]; then exec '" + bin + "' bridge; fi\ncd '" + data + "'\nexec /bin/sh -c \"$1\"\n"
+	body := "#!/bin/sh\n[ \"$1\" = -- ] && shift\n[ \"$1\" = fixture ] && shift\nif [ \"$1\" = 'one bridge' ]; then exec '" + bin + "' bridge; fi\ncd '" + data + "'\nexec /bin/sh -c \"$1\"\n"
 	if e = os.WriteFile(script, []byte(body), 0700); e != nil {
 		t.Fatal(e)
 	}

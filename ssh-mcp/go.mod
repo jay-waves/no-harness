@@ -1,4 +1,4 @@
-module github.com/jay-waves/comp7607a/ssh-mcp
+module github.com/jay-waves/comp7607a/one
 
 go 1.26.0
 

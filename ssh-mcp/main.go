@@ -1,4 +1,4 @@
-// ssh-mcp is a small SSH execution and file-copy server for MCP clients.
+// one is a small SSH execution and file-copy server for MCP clients.
 package main
 
 import (
@@ -18,15 +18,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jay-waves/comp7607a/ssh-mcp/internal/mcp"
-	sshio "github.com/jay-waves/comp7607a/ssh-mcp/internal/ssh"
+	"github.com/jay-waves/comp7607a/one/internal/mcp"
+	sshio "github.com/jay-waves/comp7607a/one/internal/ssh"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/pkg/sftp"
 	"golang.org/x/sys/unix"
 )
 
 const version = "0.2.0"
-const remoteCommand = "ssh-mcp bridge"
+const remoteCommand = "one bridge"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -36,13 +36,13 @@ func main() {
 }
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: ssh-mcp mcp | cp upload|download HOST LOCAL REMOTE | sessions HOST | bridge")
+		return fmt.Errorf("usage: one mcp | cp upload|download HOST LOCAL REMOTE | sessions HOST | bridge")
 	}
 	ctx := context.Background()
 	switch args[0] {
 	case "mcp":
 		if len(args) != 1 {
-			return fmt.Errorf("usage: ssh-mcp mcp")
+			return fmt.Errorf("usage: one mcp")
 		}
 		client := &mcp.Client{Version: version, Dial: dialWorker}
 		defer client.Shutdown()
@@ -51,12 +51,12 @@ func run(args []string) error {
 		return server.Run(ctx, &sdk.StdioTransport{})
 	case "cp":
 		if len(args) != 5 {
-			return fmt.Errorf("usage: ssh-mcp cp upload|download HOST LOCAL REMOTE")
+			return fmt.Errorf("usage: one cp upload|download HOST LOCAL REMOTE")
 		}
 		return copyFile(ctx, copyInput{Direction: args[1], Host: args[2], LocalPath: args[3], RemotePath: args[4]})
 	case "sessions":
 		if len(args) != 2 {
-			return fmt.Errorf("usage: ssh-mcp sessions HOST")
+			return fmt.Errorf("usage: one sessions HOST")
 		}
 		client := &mcp.Client{Version: version, Dial: dialWorker}
 		defer client.Shutdown()

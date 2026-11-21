@@ -10,7 +10,7 @@ codex = sum(
     for path in bundle.rglob("*")
     if path.is_file() and not path.is_symlink()
 )
-worker = (work / "ssh-mcp").stat().st_size
+worker = (work / "one").stat().st_size
 results = {}
 for profile in ("python", "base"):
     container = subprocess.check_output(

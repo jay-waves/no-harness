@@ -1,4 +1,4 @@
-# Lightweight Remote Execution for a Local LLM Agent
+# ∅ne: Lightweight Remote Execution for a Local LLM Agent
 
 COMP7607A Natural Language Processing Project
 
@@ -20,19 +20,21 @@ The controller is the natural place for model credentials, target profiles, acce
 
 Can one local Codex instance operate remote environments through thin workers with less per-target deployment overhead? When does a persistent shell or Python session improve remote execution over running each command in a fresh process?
 
-The [proposal](proposal.md) describes the broader design for SSH, Docker, and WSL. This report records public harness measurements and a loopback SSH pilot. The SSH prototype supports persistent Bash and Python sessions, a version handshake with remote system metadata, execution IDs, bounded output reads, reconnecting to live sessions, and SFTP. [SSH MCP implementation](ssh-mcp/README.md)
+The [proposal](proposal.md) describes the broader design for SSH, Docker, and WSL. This report records public harness measurements and a loopback SSH pilot. The SSH prototype supports persistent Bash and Python sessions, a version handshake with remote system metadata, execution IDs, bounded output reads, reconnecting to live sessions, and SFTP. [∅ne implementation](ssh-mcp/README.md)
 
 ## Implementation
 
-Codex talks to a local `ssh-mcp` process through MCP. The client opens an SSH channel to a bridge on the target, which relays requests to a worker over a private Unix socket. The worker starts on first use and owns the interpreter processes. When the SSH channel closes, the worker can keep those processes and their state alive.
+The prototype was renamed from `ssh-mcp` to ∅ne after the reported pilots; the measurements below used the pre-rename 0.2.0 executable. The implementation and protocol are the same.
+
+Codex talks to a local `one` process through MCP. The client opens an SSH channel to a bridge on the target, which relays requests to a worker over a private Unix socket. The worker starts on first use and owns the interpreter processes. When the SSH channel closes, the worker can keep those processes and their state alive.
 
 ```mermaid
 flowchart LR
     subgraph Local["Controller"]
-        Codex["Codex"] -->|MCP| Client["ssh-mcp client"]
+        Codex["Codex"] -->|MCP| Client["one client"]
     end
     subgraph Remote["Linux SSH target"]
-        Bridge["ssh-mcp bridge"] -->|Unix socket| Worker["Worker"]
+        Bridge["one bridge"] -->|Unix socket| Worker["Worker"]
         Worker --> Shell["Bash session"]
         Worker --> Python["Python session"]
     end
@@ -74,8 +76,8 @@ Compare the three execution modes on one Linux SSH target. Following Harness Res
 | Execution mode | Setup and state |
 | --- | --- |
 | Exec once | OpenSSH multiplexing reuses an authenticated connection. Each turn executes a fresh remote command. Files can carry explicit state. |
-| SSH Bash REPL | Open one `ssh-mcp` Bash session. Working directory, variables, and functions persist. A Python command starts a fresh interpreter each time. |
-| SSH Python REPL | Open one `ssh-mcp` Python session. Imports, working directory, and Python objects persist. |
+| SSH Bash REPL | Open a Bash session with ∅ne. Working directory, variables, and functions persist. A Python command starts a fresh interpreter each time. |
+| SSH Python REPL | Open a Python session with ∅ne. Imports, working directory, and Python objects persist. |
 
 | Workflow | Fixed turns | What it tests |
 | --- | --- | --- |
@@ -93,7 +95,7 @@ An optional Codex demo can replay the same CSV follow-ups with a pinned model an
 
 The [experiment runner](experiments/README.md) documents the loopback, deployment, and memory measurements.
 
-On November 21, 2026, a scripted pilot ran on a single Linux machine with an authenticated loopback SSH fixture, Go 1.27.4, Python 3.14.3, and ssh-mcp 0.2.0. Exec once used one authenticated Go SSH client with a new execution channel per command. Both REPLs used the Go MCP SDK over stdio to call the same ssh-mcp tools a client would use. The fixture kept its worker and SSH transports warm and recreated the REPL sessions once per repetition. The pilot interleaved modes in a fixed order with one untimed warm-up call per mode and used a three-minute overall deadline. Model inference and an external network round trip were absent.
+On November 21, 2026, a scripted pilot ran on a single Linux machine with an authenticated loopback SSH fixture, Go 1.27.4, Python 3.14.3, and the pre-rename `ssh-mcp` 0.2.0 executable. Exec once used one authenticated Go SSH client with a new execution channel per command. Both REPLs used the Go MCP SDK over stdio to call the same ∅ne tools a client would use. The fixture kept its worker and SSH transports warm and recreated the REPL sessions once per repetition. The pilot interleaved modes in a fixed order with one untimed warm-up call per mode and used a three-minute overall deadline. Model inference and an external network round trip were absent.
 
 All 90 timed result-producing calls returned the expected output with exit code zero. The filter setup was timed separately from the two filter applications. Direct SSH prepared an executable filter file, Bash retained a shell function and working directory, and Python retained a callable and working directory. The byte-count and filter tasks used each runtime's native operations, so those rows compare the practical interfaces and their chosen commands.
 
@@ -110,9 +112,9 @@ The CSV fixture contained one integer per line from 1 to 100,000, with a trailin
 
 ## Per-target deployment footprint
 
-A second pilot used an x86-64 Alpine 3.23 root filesystem with BusyBox, Python 3, and OpenSSH Server. The compilation profile also installed GCC and musl development headers. For each profile, both deployments used the same base and task dependencies. The complete Codex 0.170.0 musl distribution was the published standalone bundle. The worker was ssh-mcp 0.2.0, built with `CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w'`. Sizes below sum regular file contents in the exported base rootfs and the unpacked deployment payload. They exclude container-layer overhead, task outputs, and session logs. [11]
+A second pilot used an x86-64 Alpine 3.23 root filesystem with BusyBox, Python 3, and OpenSSH Server. The compilation profile also installed GCC and musl development headers. For each profile, both deployments used the same base and task dependencies. The complete Codex 0.170.0 musl distribution was the published standalone bundle. The worker was the pre-rename `ssh-mcp` 0.2.0 executable, built with `CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w'`. Sizes below sum regular file contents in the exported base rootfs and the unpacked deployment payload. They exclude container-layer overhead, task outputs, and session logs. [11]
 
-| Footprint | Base only | Target with standalone Codex | Target with ssh-mcp |
+| Footprint | Base only | Target with standalone Codex | Target with ∅ne |
 | --- | ---: | ---: | ---: |
 | Per-target deployment increment | — | 478.09 MiB | 9.17 MiB |
 | Alpine + Python + OpenSSH, total | 49.77 MiB | 527.85 MiB | 58.94 MiB |
@@ -151,8 +153,8 @@ On the Alpine Python/OpenSSH baseline, five fresh containers per configuration w
 | --- | ---: | ---: |
 | Codex CLI, file-backed pages | 116,825 KiB | — |
 | Codex CLI, anonymous pages | 29,164 KiB | — |
-| SSH MCP bridge | — | 4,927 KiB |
-| SSH MCP worker | — | 6,421 KiB |
+| ∅ne bridge | — | 4,927 KiB |
+| ∅ne worker | — | 6,421 KiB |
 | Python excluding musl mappings | 10,039 KiB | 11,085 KiB |
 | musl mappings | 300 KiB | 300 KiB |
 | **Stack total** | **156,328 KiB** | **22,733 KiB** |
@@ -169,7 +171,7 @@ The memory comparison is a snapshot of selected target processes with a mock mod
 
 ## Future work
 
-A controller machine could host the frontend, Codex CLI, an API proxy, and the SSH MCP client. The frontend would submit jobs and display status and results. Codex would plan the work and could delegate independent jobs to subagent sessions managed on the controller. The client would route each job to a target with the required runtime and track its session and execution ID. The proxy would manage model API connectivity and credentials on the controller. Workers would execute code near the files and services they operate on and return results over SSH.
+A controller machine could host the frontend, Codex CLI, an API proxy, and the ∅ne client. The frontend would submit jobs and display status and results. Codex would plan the work and could delegate independent jobs to subagent sessions managed on the controller. The client would route each job to a target with the required runtime and track its session and execution ID. The proxy would manage model API connectivity and credentials on the controller. Workers would execute code near the files and services they operate on and return results over SSH.
 
 ```mermaid
 flowchart LR
@@ -179,7 +181,7 @@ flowchart LR
         Codex --> Agents["Subagent sessions"]
         Codex --> Proxy["Model API proxy"]
         Agents --> Proxy
-        Agents --> Client["SSH MCP client"]
+        Agents --> Client["∅ne client"]
     end
     Proxy -->|HTTPS| Model["Model API"]
     subgraph Targets["Execution nodes"]
@@ -196,7 +198,7 @@ The first cluster prototype could dispatch independent jobs to two or three Linu
 
 ## Project contribution and related work
 
-**ssh-mcp** is a small Go tool for forwarding execution over SSH and keeping Bash and Python processes alive. Its MCP interface returns a version handshake, execution IDs, and bounded output. The target worker keeps sessions available for reconnecting clients. The course project includes the implementation and reproducible pilots. [Implementation and setup](ssh-mcp/README.md) · [Experiment runner](experiments/README.md)
+**∅ne** is a small Go tool for forwarding execution over SSH and keeping Bash and Python processes alive. Its MCP interface returns a version handshake, execution IDs, and bounded output. The target worker keeps sessions available for reconnecting clients. The course project includes the implementation and reproducible pilots. [Implementation and setup](ssh-mcp/README.md) · [Experiment runner](experiments/README.md)
 
 The pilots show two practical benefits. The persistent Python session shortened the three-turn CSV task from **113.98 ms to 61.02 ms**, including session setup. The SSH worker added **9.17 MiB** per target, while deploying the full Codex CLI bundle added **478.09 MiB**.
 

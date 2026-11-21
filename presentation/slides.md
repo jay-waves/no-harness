@@ -1,13 +1,13 @@
 <p class="eyebrow">COMP7607A · NATURAL LANGUAGE PROCESSING PROJECT</p>
 
-# Lightweight Remote Execution
+# ∅ne
 
-## Persistent Code Mode sessions for a local LLM agent
+## Lightweight remote execution for coding agents
 
 <p class="caption">Yu, Jiawei · 3036809907</p>
 
 Notes:
-This deck presents the proposed design and evaluation from proposal.md.
+∅ne is pronounced “One.” The command is one. This deck presents the prototype and its evaluation.
 
 ---
 
@@ -29,19 +29,17 @@ The N + M model counts one integration per device and provider. The prototype cu
 
 # What agent harnesses cost
 
-| Harness | Install footprint | Typical RSS |
+| Harness | Published install size | Reported RSS |
 | --- | ---: | ---: |
-| <img class="brand-icon" src="brand-icon:claude-code.png" alt=""> Claude Code | 356 MiB | 310.9 MB |
-| <img class="brand-icon" src="brand-icon:codex.svg" alt=""> Codex | 478 MiB | 123.4 MB |
-| <img class="brand-icon" src="brand-icon:opencode.svg" alt=""> OpenCode | 241 MiB | 576.1 MB |
-| <img class="brand-icon" src="brand-icon:grok.svg" alt=""> Grok Build | 199 MiB | 96.7 MB |
-| <img class="brand-icon" src="brand-icon:deepseek.png" alt=""> DeepSeek Harness | 5.94 MiB | 185.6 MB |
-| <img class="brand-icon" src="brand-icon:nanobot.svg" alt=""> HKUDS nanobot | ≈161 MB | ≈420 MB |
-
-<p class="caption">RSS uses macOS CLI process-tree means and a Linux nanobot gateway measurement. Install figures use Linux images or unpacked packages, with different versions and scopes.</p>
+| <img class="brand-icon" src="brand-icon:claude-code.png" alt=""> Claude Code | 356 MiB | 310.9 MB (cli) |
+| <img class="brand-icon" src="brand-icon:codex.svg" alt=""> Codex CLI | 478 MiB | 123.4 MB (cli) |
+| <img class="brand-icon" src="brand-icon:opencode.svg" alt=""> OpenCode | 241 MiB | 576.1 MB (cli + service) |
+| <img class="brand-icon" src="brand-icon:grok.svg" alt=""> Grok Build | 199 MiB | 96.7 MB (cli) |
+| <img class="brand-icon" src="brand-icon:deepseek.png" alt=""> DeepSeek Harness | 5.94 MiB (npm package) | 185.6 MB (cli) |
+| <img class="brand-icon" src="brand-icon:nanobot.svg" alt=""> HKUDS nanobot | ≈161 MB (wheel) | ≈420 MB (gateway) |
 
 Notes:
-Install figures for Claude Code 2.1.327, Codex 0.170.0, and OpenCode 2.3.2 are image increments from Harness Resource Bench. Grok Build 1.0.92 is the Linux executable. DeepSeek 0.2.2-rc.5 is the main npm package alone. nanobot 0.4.2 is the unpacked wheel. Harness Perf Benchmark reports mean RSS for Claude Code 2.1.277, Codex 0.155.1, OpenCode v2 2.0.10, Grok Build 1.0.41, and DeepSeek 0.1.5-rc.2. Grok and OpenCode ran in separate benchmark batches. The nanobot gateway measurement is from 0.1.5.post2.
+Install figures for Claude Code 2.1.327, Codex 0.170.0, and OpenCode 2.3.2 are image increments from Harness Resource Bench. Grok Build 1.0.92 is the Linux executable. DeepSeek 0.2.2-rc.5 is the main npm package alone. nanobot 0.4.2 is the unpacked wheel. Harness Perf Benchmark reports mean RSS for Claude Code 2.1.277, Codex 0.155.1, OpenCode v2 2.0.10, Grok Build 1.0.41, and DeepSeek 0.1.5-rc.2. The RSS benchmark sampled macOS process trees without browser or desktop clients. OpenCode used its standalone service mode. Grok and OpenCode ran in separate batches. The nanobot gateway measurement is from 0.1.5.post2.
 
 ---
 
@@ -85,7 +83,7 @@ The direct baseline can still reuse SSH connections and running containers, batc
 # Remote REPLs keep state across calls
 
 <!-- diagram: architecture.d2 -->
-<!-- alt: The user starts Codex on the controller, and Codex calls a session manager over MCP. The illustrated targets run a Python REPL on the SSH host, a Node.js REPL in Docker, and a shell REPL in WSL. -->
+<!-- alt: The user starts Codex on the controller, and Codex calls the ∅ne session manager over MCP. The illustrated targets run a Python REPL on the SSH host, a Node.js REPL in Docker, and a shell REPL in WSL. -->
 
 <p class="caption">Each REPL keeps its own session state. The prototype supports Bash and Python. Node.js illustrates another runtime.</p>
 
@@ -94,9 +92,9 @@ Model API access stays local. Workload traffic follows the target network. The p
 
 ---
 
-# How ssh-mcp runs a code block
+# How ∅ne runs a code block
 
-Codex calls a local MCP server. An SSH bridge forwards the request to a worker on the target.
+Codex calls the local MCP server. ∅ne forwards the request over SSH to its worker on the target.
 
 | Step | What happens |
 | --- | --- |
@@ -114,21 +112,28 @@ The per-user worker owns the interpreter processes and listens on a private Unix
 
 ---
 
-# Persistent Python cuts repeated CSV work
+# Experimental setup and CSV pilot
 
-| Warm loopback SSH | CSV parses | Three turns, including a new REPL where applicable |
+**Environment.** Docker containers with Alpine Linux (musl libc) for disk and memory tests. A shared, minimal base reduces variation from system packages.
+
+**Benchmark.** A scripted CSV microbenchmark over warm loopback SSH compares three execution modes. End-to-end agent tasks are a separate planned benchmark.
+
+| Execution mode | CSV parses | Three-turn median |
 | --- | ---: | ---: |
 | Exec once | 3 | 113.98 ms |
 | Bash REPL | 3 | 117.22 ms |
 | Python REPL | 1 | 61.02 ms |
 
-<p class="caption">Median of five trials per mode. All three used the same Python parser and calculations.</p>
+<p class="caption">Five trials per mode. Same parser and calculations. Times include REPL startup where applicable.</p>
+
+Notes:
+The CSV pilot ran on one Linux host over loopback SSH. It used fixed commands without model inference. The Docker and Alpine setup was used for deployment size and PSS measurements. Harness Resource Bench informed the fixed-action approach. The planned end-to-end agent benchmark compares direct commands, remote full agents, and persistent remote REPLs on tasks with verifiable outcomes.
 
 ---
 
 # Per-target deployment footprint
 
-| Unpacked footprint | Standalone Codex | SSH MCP worker |
+| Unpacked footprint | Standalone Codex | ∅ne worker |
 | --- | ---: | ---: |
 | Added to each target | **478.09 MiB** | **9.17 MiB** |
 | Total with Alpine, Python, and OpenSSH | 527.85 MiB | 58.94 MiB |
@@ -139,7 +144,7 @@ Four scripted checks passed through the worker. We read and wrote a file, compil
 <p class="caption">The Codex bundle contains several static executables and optional voice libraries. Both targets use the same Alpine, Python, and task dependencies.</p>
 
 Notes:
-Unpacked Linux x86-64 footprint. Codex 0.170.0 official musl bundle versus a stripped static ssh-mcp 0.2.0 build. The Codex CLI, exec server, and Code Mode host are separate static binaries. The optional voice bundle includes 11.72 MiB of shared libraries and uses the glibc loader. The two task routes used deterministic scripts. Codex startup was checked separately. Docker carried the worker bridge. See REPORT.md for the executable and dependency breakdown.
+Unpacked Linux x86-64 footprint. Codex 0.170.0 official musl bundle versus a stripped static build of the ∅ne worker prototype. The Codex CLI, exec server, and Code Mode host are separate static binaries. The optional voice bundle includes 11.72 MiB of shared libraries and uses the glibc loader. The two task routes used deterministic scripts. Codex startup was checked separately. Docker carried the worker bridge. See REPORT.md for the executable and dependency breakdown.
 
 ---
 
@@ -150,7 +155,7 @@ Unpacked Linux x86-64 footprint. Codex 0.170.0 official musl bundle versus a str
 <p class="caption">Python worker baseline: Alpine rootfs (musl), BusyBox, and Python. The measured 49.77 MiB base also includes OpenSSH.</p>
 
 Notes:
-The large figures above the bars are payload increments. The Alpine layer is included in both stacks and drawn at the same scale. The Python worker needs an Alpine rootfs, BusyBox, and Python, alongside the worker executable. The SSH deployment additionally needs an SSH server. Unpacked official Codex 0.170.0 Linux x86-64 musl bundle versus the stripped static ssh-mcp worker. The voice shared libraries include GLib, GStreamer, Opus, and glibc. See the next slide for the sampled runtime memory.
+The large figures above the bars are payload increments. The Alpine layer is included in both stacks and drawn at the same scale. The Python worker needs an Alpine rootfs, BusyBox, and Python, alongside the worker executable. The SSH deployment additionally needs an SSH server. Unpacked official Codex 0.170.0 Linux x86-64 musl bundle versus the stripped static ∅ne worker. The voice shared libraries include GLib, GStreamer, Opus, and glibc. See the next slide for the sampled runtime memory.
 
 ---
 
@@ -214,7 +219,7 @@ An inconclusive comparison leaves comparable quality unestablished.
 
 # Project contribution and related work
 
-**ssh-mcp** keeps Bash and Python sessions alive across SSH reconnects.
+**∅ne** keeps Bash and Python sessions alive across SSH reconnects. The command is `one`.
 
 Three-turn CSV task **113.98 → 61.02 ms**. Worker deployment **9.17 MiB per target**, versus **478.09 MiB** for the full Codex CLI bundle.
 

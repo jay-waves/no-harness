@@ -33,7 +33,7 @@ PY
     printf '%s  %s\n' 'a77ff87be7ba809d715728270a78f5ce3527dc07529416d1ef8929b90b8475eb' "$archive" | sha256sum -c -
     mkdir -p "$work/codex-package"
     tar -xzf "$archive" -C "$work/codex-package"
-    (cd "$repo/ssh-mcp" && CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w' -o "$work/ssh-mcp" .)
+    (cd "$repo/ssh-mcp" && CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w' -o "$work/one" .)
 
     docker build --build-arg 'BUILD_TOOLS=gcc musl-dev' -t no-harness-footprint:base - < "$here/Dockerfile"
     docker build -t no-harness-footprint:python - < "$here/Dockerfile"
@@ -50,7 +50,7 @@ PY
         docker run --rm --network none \
           -v "$here/memory.py:/tmp/memory.py:ro,Z" \
           -v "$work/codex-package:/opt/codex:ro,Z" \
-          -v "$work/ssh-mcp:/usr/local/bin/ssh-mcp:ro,Z" \
+          -v "$work/one:/usr/local/bin/one:ro,Z" \
           no-harness-footprint:python python3 /tmp/memory.py "$mode" >> "$results/memory.jsonl"
       done
     done

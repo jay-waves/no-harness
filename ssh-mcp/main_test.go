@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jay-waves/comp7607a/ssh-mcp/internal/mcp"
-	"github.com/jay-waves/comp7607a/ssh-mcp/internal/sshtest"
+	"github.com/jay-waves/comp7607a/one/internal/mcp"
+	"github.com/jay-waves/comp7607a/one/internal/sshtest"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestMCPOverSSH(t *testing.T) {
 	dir := t.TempDir()
-	binary := filepath.Join(dir, "ssh-mcp")
+	binary := filepath.Join(dir, "one")
 	build := exec.Command("go", "build", "-buildvcs=false", "-o", binary, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v %s", err, out)

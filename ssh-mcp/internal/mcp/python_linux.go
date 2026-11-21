@@ -34,7 +34,7 @@ for line in jobs:
                 status.write(job["id"] + " ready\n")
                 try:
                     with open(job["code"], "rb") as source:
-                        code = compile(source.read(), "<ssh-mcp>", "exec")
+                        code = compile(source.read(), "<one>", "exec")
                     exec(code, namespace)
                 except BaseException:
                     traceback.print_exc(file=streams[2])

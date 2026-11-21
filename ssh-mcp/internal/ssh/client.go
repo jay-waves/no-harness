@@ -68,7 +68,7 @@ func dial(ctx context.Context, o Options, depth int, budgets *authenticationBudg
 				}
 				return a.Cipher + " / " + a.MAC
 			}
-			fmt.Fprintf(out, "[ssh-mcp] SSH %q: kex=%s hostkey=%s send=%s receive=%s\n", o.Host, algorithms.KeyExchange, algorithms.HostKey, direction(algorithms.Write), direction(algorithms.Read))
+			fmt.Fprintf(out, "[one] SSH %q: kex=%s hostkey=%s send=%s receive=%s\n", o.Host, algorithms.KeyExchange, algorithms.HostKey, direction(algorithms.Write), direction(algorithms.Read))
 		}
 	}
 	client.keepalive(cfg.get("serveraliveinterval"), cfg.get("serveralivecountmax"))

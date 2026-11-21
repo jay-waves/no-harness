@@ -27,16 +27,16 @@ export function CodexBundle() {
   const workerTop = baseline - height(workerBytes)
 
   return <svg className="codex-bundle" viewBox="0 0 904 380" role="img"
-    aria-label={`Added disk footprint. Codex bundle, ${formatMiB(total)} MiB. SSH worker, ${formatMiB(workerBytes)} MiB. Both targets include a shared Alpine base of ${alpineBaseMiB} MiB. ${components.map(({ name, bytes }) => `${name}: ${formatMiB(bytes)} MiB`).join('. ')}`}>
+    aria-label={`Added disk footprint. Codex bundle, ${formatMiB(total)} MiB. ∅ne worker, ${formatMiB(workerBytes)} MiB. Both targets include a shared Alpine Linux layer of ${alpineBaseMiB} MiB. ${components.map(({ name, bytes }) => `${name}: ${formatMiB(bytes)} MiB`).join('. ')}`}>
     {[workerLeft, left].map(x => <g key={x}>
       <Bar x={x} y={baseline} width={barWidth} height={baseHeight} fill="var(--tol-grey)" />
-      <text className="codex-bundle-value" x={x + barWidth / 2} y={baseline + baseHeight / 2}
-        textAnchor="middle" dominantBaseline="middle">Alpine base · {alpineBaseMiB} MiB</text>
+      <text className="codex-bundle-value codex-bundle-os" x={x + barWidth / 2} y={baseline + baseHeight / 2}
+        textAnchor="middle" dominantBaseline="middle">Alpine Linux · {alpineBaseMiB} MiB</text>
     </g>)}
     <text className="codex-bundle-total" x={workerLeft + barWidth / 2} y={243} textAnchor="middle">{formatMiB(workerBytes)} MiB</text>
     <polyline points={`126,255 126,${workerTop}`} />
     <Bar x={workerLeft} y={workerTop} width={barWidth} height={height(workerBytes)} fill="var(--tol-green)" />
-    <text x={workerLeft + barWidth / 2} y={baseline + baseHeight + 27} textAnchor="middle">SSH MCP worker</text>
+    <text x={workerLeft + barWidth / 2} y={baseline + baseHeight + 27} textAnchor="middle">∅ne worker</text>
 
     <text className="codex-bundle-total" x={left + barWidth / 2} y={37} textAnchor="middle">{formatMiB(total)} MiB</text>
     {components.map(({ name, bytes, color }, index) => {

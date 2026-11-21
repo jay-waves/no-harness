@@ -65,7 +65,7 @@ if sys.argv[1]=='codex':
    finally: py.terminate(); py.wait()
   finally: cli.terminate(); cli.wait()
 else:
- p=subprocess.Popen(['ssh-mcp','bridge'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
+ p=subprocess.Popen(['one','bridge'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
  def rpc(**kwargs):
   p.stdin.write(json.dumps({'version':'0.2.0',**kwargs})+'\n');p.stdin.flush()
   result=json.loads(p.stdout.readline())

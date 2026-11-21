@@ -1,4 +1,4 @@
-# Lightweight Remote Execution for a Local LLM Agent
+# ∅ne: Lightweight Remote Execution for a Local LLM Agent
 
 *COMP7607A Natural Language Processing Project*
 

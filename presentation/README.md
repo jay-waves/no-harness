@@ -1,4 +1,4 @@
-# Remote REPL presentation
+# ∅ne presentation
 
 The deck follows [the project proposal](../proposal.md). It uses reveal.js with the official React bindings, TypeScript, Markdown, Vite, and the Paul Tol Muted palette. Vite renders D2 diagrams and KaTeX display math at build time.
 

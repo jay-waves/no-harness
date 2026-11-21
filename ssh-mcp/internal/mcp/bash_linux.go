@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jay-waves/comp7607a/ssh-mcp/internal/proc"
+	"github.com/jay-waves/comp7607a/one/internal/proc"
 )
 
 const bashOutputLimit = 1 << 20
@@ -123,7 +123,7 @@ func StartSession(ctx context.Context, runtimeName string) (result *ProcessSessi
 	default:
 		return nil, fmt.Errorf("unsupported runtime %q", runtimeName)
 	}
-	dir, err := os.MkdirTemp("", "ssh-mcp-"+runtimeName+"-")
+	dir, err := os.MkdirTemp("", "one-"+runtimeName+"-")
 	if err != nil {
 		return nil, err
 	}
