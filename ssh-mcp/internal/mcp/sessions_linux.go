@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 )
 
-func (s *BashSession) State() string {
+func (s *ProcessSession) State() string {
 	if channelClosed(s.finished) {
 		return "exited"
 	}
@@ -23,7 +23,7 @@ func (s *BashSession) State() string {
 	return "ready"
 }
 
-func (s *BashSession) Execute(ctx context.Context, in ExecuteInput) (Execution, error) {
+func (s *ProcessSession) Execute(ctx context.Context, in ExecuteInput) (Execution, error) {
 	execution, err := s.run(ctx, in.Code, in.Stdin)
 	if err != nil {
 		return Execution{}, err
@@ -31,7 +31,7 @@ func (s *BashSession) Execute(ctx context.Context, in ExecuteInput) (Execution, 
 	return Execution{ID: execution.ID, State: "running"}, nil
 }
 
-func (s *BashSession) Read(ctx context.Context, in ReadInput) (Output, error) {
+func (s *ProcessSession) Read(ctx context.Context, in ReadInput) (Output, error) {
 	s.mu.Lock()
 	index := slices.IndexFunc(s.executions, func(execution *bashExecution) bool { return execution.ID == in.ExecutionID })
 	if index < 0 {

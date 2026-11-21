@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,6 +128,104 @@ func TestMCPOverSSH(t *testing.T) {
 		t.Fatalf("CLI copy %q: %v", data, err)
 	}
 	call(c, "session_close", map[string]any{"session_id": session.ID}, nil, false)
+	{
+		var py mcp.Session
+		call(c, "session_open", map[string]any{"host": "fixture", "runtime": "python"}, &py, false)
+		if py.Runtime != "python" || py.ProtocolVersion != mcp.ProtocolVersion || py.WorkerVersion != version || py.System == nil || py.System.OS != "linux" ||
+			py.System.Arch == "" || py.System.RuntimeVersion == "" || py.System.Cwd == "" {
+			t.Fatalf("missing remote runtime metadata: %+v", py)
+		}
+
+		execute := func(client *sdk.ClientSession, code string, wantExit int) (string, string) {
+			t.Helper()
+			var run mcp.Execution
+			call(client, "session_execute", mcp.ExecuteInput{SessionID: py.ID, Code: code, WaitMS: 100}, &run, false)
+			var stdout, stderr strings.Builder
+			cursor := ""
+			result := run.Output
+			for {
+				if result != nil {
+					stdout.WriteString(result.Stdout)
+					stderr.WriteString(result.Stderr)
+					cursor = result.Cursor
+					if result.State == "unknown" {
+						t.Fatalf("execution outcome unknown: %+v", result)
+					}
+					if result.State == "completed" && result.OutputClosed {
+						if result.ExitCode == nil || *result.ExitCode != wantExit {
+							t.Fatalf("execution exit code: %+v, stderr %q", result, stderr.String())
+						}
+						return stdout.String(), stderr.String()
+					}
+				}
+				var page mcp.Output
+				call(client, "session_read", mcp.ReadInput{SessionID: py.ID, ExecutionID: run.ID, Cursor: cursor, WaitMS: 100}, &page, false)
+				result = &page
+			}
+		}
+
+		stdout, stderr := execute(c, "import os, subprocess, sys\nvalues = [6, 7]\nos.write(1, b'direct\\n')\nsubprocess.run([sys.executable, '-c', 'import sys; print(42); print(24, file=sys.stderr)'], check=True)", 0)
+		if stdout != "direct\n42\n" || stderr != "24\n" {
+			t.Fatalf("unexpected subprocess output: stdout %q, stderr %q", stdout, stderr)
+		}
+		_, stderr = execute(c, "raise ValueError('fixture error')", 1)
+		if !strings.Contains(stderr, "ValueError: fixture error") {
+			t.Fatalf("missing Python traceback: %q", stderr)
+		}
+
+		if err := c.Close(); err != nil {
+			t.Fatal(err)
+		}
+		reconnected := connect()
+		defer reconnected.Close()
+		var live mcp.Sessions
+		call(reconnected, "session_list", mcp.OpenInput{Host: "fixture"}, &live, false)
+		if len(live.Sessions) != 1 || live.Sessions[0].ID != py.ID || live.Sessions[0].Runtime != "python" {
+			t.Fatalf("Python session missing after reconnect: %+v", live)
+		}
+		stdout, stderr = execute(reconnected, "print(sum(values))\nprint('x' * 5000)", 0)
+		if stdout != "13\n"+strings.Repeat("x", 5000)+"\n" || stderr != "" {
+			t.Fatalf("unexpected output after reconnect: stdout bytes %d, stderr %q", len(stdout), stderr)
+		}
+
+		// The child retains its original stdout even while the REPL runs
+		// another block with different output streams.
+		var background mcp.Execution
+		call(reconnected, "session_execute", mcp.ExecuteInput{
+			SessionID: py.ID,
+			Code:      "delayed = subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.read(); print(99)'], stdin=subprocess.PIPE)",
+		}, &background, false)
+		readBackground := func(cursor string) mcp.Output {
+			var out mcp.Output
+			call(reconnected, "session_read", mcp.ReadInput{
+				SessionID: py.ID, ExecutionID: background.ID, Cursor: cursor, WaitMS: 100,
+			}, &out, false)
+			if out.State == "unknown" {
+				t.Fatalf("background execution outcome unknown: %+v", out)
+			}
+			return out
+		}
+		bg := readBackground("")
+		for bg.State != "completed" {
+			bg = readBackground(bg.Cursor)
+		}
+		if bg.OutputClosed {
+			t.Fatal("background child lost its output stream")
+		}
+		stdout, stderr = execute(reconnected, "delayed.stdin.close()\ndelayed.wait()\nprint(100)", 0)
+		if stdout != "100\n" || stderr != "" {
+			t.Fatalf("unexpected output from the next block: stdout %q, stderr %q", stdout, stderr)
+		}
+		var late strings.Builder
+		for !bg.OutputClosed {
+			bg = readBackground(bg.Cursor)
+			late.WriteString(bg.Stdout)
+		}
+		if late.String() != "99\n" {
+			t.Fatalf("late output assigned to the wrong execution: %q", late.String())
+		}
+		call(reconnected, "session_close", mcp.SessionInput{SessionID: py.ID}, nil, false)
+	}
 	stop := exec.Command(binary, "worker-stop")
 	stop.Env = env
 	if out, err := stop.CombinedOutput(); err != nil {

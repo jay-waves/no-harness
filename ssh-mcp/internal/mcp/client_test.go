@@ -23,6 +23,12 @@ func TestClientReusesTransportAndDoesNotReplay(t *testing.T) {
 				if err != nil {
 					return
 				}
+				if req.Method == "hello" {
+					if WriteResponse(remote, Response{Version: "1.2.3", Protocol: ProtocolVersion, System: localSystemSummary()}) != nil {
+						return
+					}
+					continue
+				}
 				requests.Add(1)
 				if req.Method == "execute" {
 					return
@@ -68,8 +74,13 @@ func TestClientTransportOutlivesRequest(t *testing.T) {
 		go func() {
 			defer remote.Close()
 			for {
-				if _, err := ReadRequest(remote); err != nil {
+				if req, err := ReadRequest(remote); err != nil {
 					return
+				} else if req.Method == "hello" {
+					if WriteResponse(remote, Response{Version: "1.2.3", Protocol: ProtocolVersion, System: localSystemSummary()}) != nil {
+						return
+					}
+					continue
 				}
 				if WriteResponse(remote, Response{Version: "1.2.3", Sessions: &Sessions{}}) != nil {
 					return
@@ -133,8 +144,13 @@ func TestClientExpandsTransportCapacityForConcurrentCalls(t *testing.T) {
 		go func() {
 			defer remote.Close()
 			for {
-				if _, err := ReadRequest(remote); err != nil {
+				if req, err := ReadRequest(remote); err != nil {
 					return
+				} else if req.Method == "hello" {
+					if WriteResponse(remote, Response{Version: "1.2.3", Protocol: ProtocolVersion, System: localSystemSummary()}) != nil {
+						return
+					}
+					continue
 				}
 				started <- struct{}{}
 				<-release
@@ -181,6 +197,13 @@ func TestClientPoolCancellationDoesNotCloseOtherTransports(t *testing.T) {
 			req, err := ReadRequest(remote)
 			if err != nil {
 				return
+			}
+			if req.Method == "hello" {
+				_ = WriteResponse(remote, Response{Version: "1.2.3", Protocol: ProtocolVersion, System: localSystemSummary()})
+				req, err = ReadRequest(remote)
+				if err != nil {
+					return
+				}
 			}
 			started <- struct{}{}
 			if req.Method == "slow" {

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -24,7 +25,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 const remoteCommand = "ssh-mcp bridge"
 
 func main() {
@@ -90,7 +91,7 @@ func run(args []string) error {
 			return err
 		}
 		defer conn.Close()
-		if err = mcp.WriteRequest(conn, mcp.Request{Version: version, Method: "shutdown"}); err != nil {
+		if err = mcp.WriteRequest(conn, mcp.Request{Method: "shutdown"}); err != nil {
 			return err
 		}
 		response, err := mcp.ReadResponse(conn)
@@ -283,37 +284,52 @@ func bridge(ctx context.Context) error {
 
 type worker struct {
 	mu       sync.Mutex
-	sessions map[string]*mcp.BashSession
+	sessions map[string]workerSession
 	stopping bool
 }
 
+type workerSession struct {
+	*mcp.ProcessSession
+	metadata mcp.Session
+}
+
 func (w *worker) Open(ctx context.Context, in mcp.OpenInput) (mcp.Session, error) {
-	s, err := mcp.StartBashSession(ctx)
+	runtimeName := in.Runtime
+	if runtimeName == "" {
+		runtimeName = "bash"
+	}
+	cwd, err := os.Getwd()
 	if err != nil {
 		return mcp.Session{}, err
 	}
+	s, err := mcp.StartSession(ctx, runtimeName)
+	if err != nil {
+		return mcp.Session{}, err
+	}
+	summary := &mcp.SystemSummary{OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeVersion: s.Version(), Cwd: cwd}
 	var token [16]byte
-	if _, err = rand.Read(token[:]); err != nil {
+	if _, err := rand.Read(token[:]); err != nil {
 		_ = s.Close()
 		return mcp.Session{}, err
 	}
 	id := hex.EncodeToString(token[:])
+	opened := mcp.Session{ID: id, Host: in.Host, State: "ready", Runtime: runtimeName, System: summary}
 	w.mu.Lock()
 	if w.stopping {
 		w.mu.Unlock()
 		_ = s.Close()
 		return mcp.Session{}, fmt.Errorf("worker is stopping")
 	}
-	w.sessions[id] = s
+	w.sessions[id] = workerSession{s, opened}
 	w.mu.Unlock()
-	return mcp.Session{ID: id, Host: in.Host, State: "ready"}, nil
+	return opened, nil
 }
-func (w *worker) lookup(id string) (*mcp.BashSession, error) {
+func (w *worker) lookup(id string) (workerSession, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	s := w.sessions[id]
-	if s == nil {
-		return nil, fmt.Errorf("session not found")
+	s, ok := w.sessions[id]
+	if !ok {
+		return workerSession{}, fmt.Errorf("session not found")
 	}
 	return s, nil
 }
@@ -321,8 +337,10 @@ func (w *worker) List(_ context.Context, in mcp.OpenInput) (mcp.Sessions, error)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	out := mcp.Sessions{Sessions: []mcp.Session{}}
-	for id, s := range w.sessions {
-		out.Sessions = append(out.Sessions, mcp.Session{ID: id, Host: in.Host, State: s.State()})
+	for _, s := range w.sessions {
+		item := s.metadata
+		item.Host, item.State = in.Host, s.State()
+		out.Sessions = append(out.Sessions, item)
 	}
 	return out, nil
 }
@@ -342,10 +360,10 @@ func (w *worker) Read(ctx context.Context, in mcp.ReadInput) (mcp.Output, error)
 }
 func (w *worker) Close(_ context.Context, in mcp.SessionInput) (mcp.Closed, error) {
 	w.mu.Lock()
-	s := w.sessions[in.SessionID]
+	s, ok := w.sessions[in.SessionID]
 	delete(w.sessions, in.SessionID)
 	w.mu.Unlock()
-	if s == nil {
+	if !ok {
 		return mcp.Closed{}, fmt.Errorf("session not found")
 	}
 	if err := s.Close(); err != nil {
@@ -371,12 +389,12 @@ func serveWorker() error {
 	if err = os.Chmod(socket, 0600); err != nil {
 		return err
 	}
-	w := &worker{sessions: make(map[string]*mcp.BashSession)}
+	w := &worker{sessions: make(map[string]workerSession)}
 	defer func() {
 		w.mu.Lock()
 		w.stopping = true
 		sessions := w.sessions
-		w.sessions = make(map[string]*mcp.BashSession)
+		w.sessions = make(map[string]workerSession)
 		w.mu.Unlock()
 		for _, session := range sessions {
 			_ = session.Close()
@@ -397,7 +415,7 @@ func serveWorker() error {
 				if err != nil {
 					return
 				}
-				if req.Method == "shutdown" && req.Version == version {
+				if req.Method == "shutdown" {
 					_ = mcp.WriteResponse(c, mcp.Response{Version: version})
 					_ = ln.Close()
 					return

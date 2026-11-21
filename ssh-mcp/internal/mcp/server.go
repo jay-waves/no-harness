@@ -10,14 +10,15 @@ import (
 )
 
 type OpenInput struct {
-	Host string `json:"host" jsonschema:"SSH host or configuration alias"`
+	Host    string `json:"host" jsonschema:"SSH host or configuration alias"`
+	Runtime string `json:"runtime,omitempty" jsonschema:"bash (default) or python"`
 }
 type SessionInput struct {
 	SessionID string `json:"session_id"`
 }
 type ExecuteInput struct {
 	SessionID string `json:"session_id"`
-	Code      string `json:"code" jsonschema:"Complete Bash script to execute"`
+	Code      string `json:"code" jsonschema:"Complete code block in the session runtime"`
 	WaitMS    int    `json:"wait_ms,omitempty" jsonschema:"Wait up to 30000 ms for initial output; zero returns immediately"`
 	Stdin     string `json:"stdin,omitempty" jsonschema:"Fixed standard input"`
 }
@@ -28,9 +29,19 @@ type ReadInput struct {
 	WaitMS      int    `json:"wait_ms,omitempty"`
 }
 type Session struct {
-	ID    string `json:"id"`
-	Host  string `json:"host"`
-	State string `json:"state"`
+	ID              string         `json:"id"`
+	Host            string         `json:"host"`
+	State           string         `json:"state"`
+	Runtime         string         `json:"runtime,omitempty"`
+	System          *SystemSummary `json:"system,omitempty"`
+	WorkerVersion   string         `json:"worker_version,omitempty"`
+	ProtocolVersion int            `json:"protocol_version,omitempty"`
+}
+type SystemSummary struct {
+	OS             string `json:"os"`
+	Arch           string `json:"arch"`
+	RuntimeVersion string `json:"runtime_version"`
+	Cwd            string `json:"cwd"`
 }
 type Sessions struct {
 	Sessions []Session `json:"sessions"`
@@ -68,21 +79,27 @@ type Backend interface {
 
 func New(version string, b Backend) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "ssh-mcp", Version: version}, nil)
-	sdk.AddTool(s, &sdk.Tool{Name: "session_open", Description: "Open a persistent remote Bash session without a PTY."}, func(ctx context.Context, _ *sdk.CallToolRequest, in OpenInput) (*sdk.CallToolResult, Session, error) {
+	sdk.AddTool(s, &sdk.Tool{Name: "session_open", Description: "Open a persistent Bash (default) or Python session and report remote system/runtime details."}, func(ctx context.Context, _ *sdk.CallToolRequest, in OpenInput) (*sdk.CallToolResult, Session, error) {
 		if err := validateHost(in.Host); err != nil {
 			return nil, Session{}, err
+		}
+		if in.Runtime == "" {
+			in.Runtime = "bash"
+		}
+		if in.Runtime != "bash" && in.Runtime != "python" {
+			return nil, Session{}, fmt.Errorf("unsupported runtime %q", in.Runtime)
 		}
 		out, err := b.Open(ctx, in)
 		return nil, out, err
 	})
-	sdk.AddTool(s, &sdk.Tool{Name: "session_list", Description: "List remote Bash sessions for an SSH host."}, func(ctx context.Context, _ *sdk.CallToolRequest, in OpenInput) (*sdk.CallToolResult, Sessions, error) {
+	sdk.AddTool(s, &sdk.Tool{Name: "session_list", Description: "List remote execution sessions for an SSH host."}, func(ctx context.Context, _ *sdk.CallToolRequest, in OpenInput) (*sdk.CallToolResult, Sessions, error) {
 		if err := validateHost(in.Host); err != nil {
 			return nil, Sessions{}, err
 		}
 		out, err := b.List(ctx, in)
 		return nil, out, err
 	})
-	sdk.AddTool(s, &sdk.Tool{Name: "session_execute", Description: "Submit a complete Bash script. State persists in the session. Only one script can run at a time; a busy session rejects another submission. Returns an execution ID. Set wait_ms to include initial output; continue session_read with its cursor."}, func(ctx context.Context, _ *sdk.CallToolRequest, in ExecuteInput) (*sdk.CallToolResult, Execution, error) {
+	sdk.AddTool(s, &sdk.Tool{Name: "session_execute", Description: "Submit a complete code block. State persists in the session. Only one block can run at a time; a busy session rejects another submission. Returns an execution ID. Set wait_ms to include initial output; continue session_read with its cursor."}, func(ctx context.Context, _ *sdk.CallToolRequest, in ExecuteInput) (*sdk.CallToolResult, Execution, error) {
 		if in.SessionID == "" || strings.IndexByte(in.Code, 0) >= 0 || in.WaitMS < 0 || in.WaitMS > 30000 {
 			return nil, Execution{}, fmt.Errorf("invalid session or NUL in code")
 		}

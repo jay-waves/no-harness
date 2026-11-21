@@ -25,7 +25,8 @@ type clientConnection struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	conn   io.ReadWriteCloser
-	idle   bool // Protected by Client.mu.
+	hello  Response // Used only by the caller that owns the connection.
+	idle   bool     // Protected by Client.mu.
 }
 
 type rpcConnection struct {
@@ -227,12 +228,26 @@ func (c *Client) call(ctx context.Context, host string, req Request) (Response, 
 		if closed {
 			return Response{}, fmt.Errorf("MCP client closed")
 		}
+		hello, helloErr := exchange(conn, Request{Version: c.Version, Method: "hello", Protocol: ProtocolVersion})
+		if helloErr != nil {
+			return Response{}, fmt.Errorf("worker handshake: %w", helloErr)
+		}
+		if hello.Version != c.Version {
+			return Response{}, fmt.Errorf("worker release mismatch: local %s, remote %s", c.Version, hello.Version)
+		}
+		if hello.Protocol != ProtocolVersion {
+			return Response{}, fmt.Errorf("worker protocol mismatch: local %d, remote %d", ProtocolVersion, hello.Protocol)
+		}
+		if hello.Error != "" {
+			return Response{}, fmt.Errorf("worker handshake: %s", hello.Error)
+		}
+		if hello.System == nil || hello.System.OS == "" || hello.System.Arch == "" {
+			return Response{}, fmt.Errorf("worker handshake: missing system summary")
+		}
+		entry.hello = hello
 	}
 	req.Version = c.Version
-	if err = WriteRequest(conn, req); err != nil {
-		return Response{}, fmt.Errorf("send request: %w", err)
-	}
-	res, err := ReadResponse(conn)
+	res, err := exchange(conn, req)
 	if err != nil {
 		return Response{}, fmt.Errorf("response unavailable; operation outcome may be unknown: %w", err)
 	}
@@ -242,6 +257,27 @@ func (c *Client) call(ctx context.Context, host string, req Request) (Response, 
 	reuse = true
 	if res.Error != "" {
 		return Response{}, fmt.Errorf("remote: %s", res.Error)
+	}
+	if res.Session != nil {
+		info := *entry.hello.System
+		if res.Session.System != nil {
+			info.RuntimeVersion = res.Session.System.RuntimeVersion
+			info.Cwd = res.Session.System.Cwd
+		}
+		res.Session.System = &info
+		res.Session.WorkerVersion = entry.hello.Version
+		res.Session.ProtocolVersion = entry.hello.Protocol
+	}
+	return res, nil
+}
+
+func exchange(conn io.ReadWriteCloser, req Request) (Response, error) {
+	if err := WriteRequest(conn, req); err != nil {
+		return Response{}, fmt.Errorf("send request: %w", err)
+	}
+	res, err := ReadResponse(conn)
+	if err != nil {
+		return Response{}, err
 	}
 	return res, nil
 }

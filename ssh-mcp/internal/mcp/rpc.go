@@ -6,30 +6,43 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"runtime"
 )
 
 // Request and Response are exchanged over the authenticated SSH transport.
 type Request struct {
-	Version string       `json:"version"`
-	Method  string       `json:"method"`
-	Open    OpenInput    `json:"open,omitzero"`
-	Session SessionInput `json:"session,omitzero"`
-	Execute ExecuteInput `json:"execute,omitzero"`
-	Read    ReadInput    `json:"read,omitzero"`
+	Version  string       `json:"version"`
+	Protocol int          `json:"protocol,omitempty"`
+	Method   string       `json:"method"`
+	Open     OpenInput    `json:"open,omitzero"`
+	Session  SessionInput `json:"session,omitzero"`
+	Execute  ExecuteInput `json:"execute,omitzero"`
+	Read     ReadInput    `json:"read,omitzero"`
 }
 type Response struct {
-	Version   string     `json:"version"`
-	Error     string     `json:"error,omitempty"`
-	Session   *Session   `json:"session,omitempty"`
-	Sessions  *Sessions  `json:"sessions,omitempty"`
-	Execution *Execution `json:"execution,omitempty"`
-	Output    *Output    `json:"output,omitempty"`
-	Closed    *Closed    `json:"closed,omitempty"`
+	Version   string         `json:"version"`
+	Protocol  int            `json:"protocol,omitempty"`
+	System    *SystemSummary `json:"system,omitempty"`
+	Error     string         `json:"error,omitempty"`
+	Session   *Session       `json:"session,omitempty"`
+	Sessions  *Sessions      `json:"sessions,omitempty"`
+	Execution *Execution     `json:"execution,omitempty"`
+	Output    *Output        `json:"output,omitempty"`
+	Closed    *Closed        `json:"closed,omitempty"`
 }
 
 // Dispatch validates the exact release before invoking an operation.
 func Dispatch(ctx context.Context, b Backend, req Request, version string) Response {
 	res := Response{Version: version}
+	if req.Method == "hello" {
+		res.Protocol = ProtocolVersion
+		if req.Protocol != ProtocolVersion {
+			res.Error = "protocol version mismatch"
+			return res
+		}
+		res.System = localSystemSummary()
+		return res
+	}
 	if req.Version != version {
 		res.Error = "release version mismatch"
 		return res
@@ -63,6 +76,12 @@ func Dispatch(ctx context.Context, b Backend, req Request, version string) Respo
 		return Response{Version: version, Error: err.Error()}
 	}
 	return res
+}
+
+const ProtocolVersion = 1
+
+func localSystemSummary() *SystemSummary {
+	return &SystemSummary{OS: runtime.GOOS, Arch: runtime.GOARCH}
 }
 
 func WriteRequest(w io.Writer, req Request) error {

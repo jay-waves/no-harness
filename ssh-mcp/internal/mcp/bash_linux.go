@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,8 +27,10 @@ import (
 const bashOutputLimit = 1 << 20
 const bashExecutionLimit = 16
 
-// BashSession owns the noninteractive shell and its bounded execution history.
-type BashSession struct {
+// ProcessSession owns an interpreter and its bounded execution history.
+type ProcessSession struct {
+	runtime     string
+	version     string
 	cmd         *exec.Cmd
 	input       io.Writer
 	status      *bufio.Reader
@@ -103,11 +106,24 @@ func (e *bashExecution) notify() {
 	}
 }
 
-func StartBashSession(ctx context.Context) (result *BashSession, _ error) {
+func StartBashSession(ctx context.Context) (*ProcessSession, error) {
+	return StartSession(ctx, "bash")
+}
+
+func StartSession(ctx context.Context, runtimeName string) (result *ProcessSession, _ error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	dir, err := os.MkdirTemp("", "ssh-mcp-bash-")
+	var cmd *exec.Cmd
+	switch runtimeName {
+	case "bash":
+		cmd = exec.Command("bash", "--noprofile", "--norc")
+	case "python":
+		cmd = exec.Command("python3", "-u", "-c", pythonBootstrap)
+	default:
+		return nil, fmt.Errorf("unsupported runtime %q", runtimeName)
+	}
+	dir, err := os.MkdirTemp("", "ssh-mcp-"+runtimeName+"-")
 	if err != nil {
 		return nil, err
 	}
@@ -126,16 +142,49 @@ func StartBashSession(ctx context.Context) (result *BashSession, _ error) {
 			_ = controlRead.Close()
 		}
 	}()
-	cmd := exec.Command("bash", "--noprofile", "--norc")
 	cmd.ExtraFiles = []*os.File{controlWrite}
 	input, err := cmd.StdinPipe()
 	if err == nil {
 		err = cmd.Start()
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("start %s interpreter: %w", runtimeName, err)
 	}
-	b := &BashSession{cmd: cmd, input: input, status: bufio.NewReader(controlRead), dir: dir, finished: make(chan struct{})}
+	// Read the version from the same process that will execute submitted code.
+	// A deadline prevents broken interpreter wrappers from blocking open forever.
+	deadline := time.Now().Add(5 * time.Second)
+	if sooner, ok := ctx.Deadline(); ok && sooner.Before(deadline) {
+		deadline = sooner
+	}
+	status := bufio.NewReader(controlRead)
+	readVersion := func() (string, error) {
+		if err := controlRead.SetReadDeadline(deadline); err != nil {
+			return "", err
+		}
+		if runtimeName == "bash" {
+			if _, err := io.WriteString(input, "builtin printf '%s\\n' \"$BASH_VERSION\" >&3\n"); err != nil {
+				return "", err
+			}
+		}
+		line, err := status.ReadSlice('\n')
+		if err != nil {
+			return "", err
+		}
+		if err := controlRead.SetReadDeadline(time.Time{}); err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(line)), nil
+	}
+	runtimeVersion, err := readVersion()
+	if err != nil || runtimeVersion == "" {
+		_ = cmd.Process.Kill()
+		_ = proc.Wait(cmd)
+		if err != nil {
+			return nil, fmt.Errorf("%s interpreter did not report its version: %w", runtimeName, err)
+		}
+		return nil, fmt.Errorf("%s interpreter reported an empty version", runtimeName)
+	}
+	b := &ProcessSession{runtime: runtimeName, version: runtimeVersion, cmd: cmd, input: input, status: status, dir: dir, finished: make(chan struct{})}
 	go func() {
 		b.waitErr = proc.Wait(cmd)
 		b.unavailable.Store(true)
@@ -155,9 +204,9 @@ func StartBashSession(ctx context.Context) (result *BashSession, _ error) {
 
 func bashQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
 
-// run executes a script in the current Bash process. Background descendants can
+// run executes code in the current interpreter. Background descendants can
 // keep output streams open; their output remains associated with this call.
-func (b *BashSession) run(ctx context.Context, code, stdin string) (*bashExecution, error) {
+func (b *ProcessSession) run(ctx context.Context, code, stdin string) (*bashExecution, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -173,13 +222,13 @@ func (b *BashSession) run(ctx context.Context, code, stdin string) (*bashExecuti
 		}
 	}
 	if n := len(b.executions); n > 0 && !channelClosed(b.executions[n-1].Done) {
-		return nil, fmt.Errorf("bash session is busy")
+		return nil, fmt.Errorf("%s session is busy", b.runtime)
 	}
 	if b.unavailable.Load() {
-		return nil, fmt.Errorf("bash session closed")
+		return nil, fmt.Errorf("%s session closed", b.runtime)
 	}
 	if strings.ContainsRune(code, 0) {
-		return nil, fmt.Errorf("NUL in bash code")
+		return nil, fmt.Errorf("NUL in %s code", b.runtime)
 	}
 	id := rand.Text()
 	path := filepath.Join(b.dir, id)
@@ -249,11 +298,21 @@ func (b *BashSession) run(ctx context.Context, code, stdin string) (*bashExecuti
 			}
 		}
 	}
-	command := fmt.Sprintf("{ builtin printf '%%s ready\\n' %s >&3; builtin source %s; } <%s >%s 2>%s; builtin printf '%%s %%s\\n' %s \"$?\" >&3\n",
-		bashQuote(id), bashQuote(codePath), bashQuote(inPath), bashQuote(outPath), bashQuote(errPath), bashQuote(id))
+	var command string
+	if b.runtime == "python" {
+		job, err := json.Marshal(map[string]string{
+			"id": id, "code": codePath, "stdin": inPath, "stdout": outPath, "stderr": errPath,
+		})
+		if err != nil {
+			return nil, err
+		}
+		command = string(job) + "\n"
+	} else {
+		command = fmt.Sprintf("{ builtin printf '%%s ready\\n' %s >&3; builtin source %s; } <%s >%s 2>%s; builtin printf '%%s %%s\\n' %s \"$?\" >&3\n",
+			bashQuote(id), bashQuote(codePath), bashQuote(inPath), bashQuote(outPath), bashQuote(errPath), bashQuote(id))
+	}
 	if _, err := io.WriteString(b.input, command); err != nil {
-		// Bash may have read part of the command. A later submission
-		// cannot safely reuse this input stream.
+		// A partial submission makes this input stream unsuitable for another job.
 		b.unavailable.Store(true)
 		return nil, err
 	}
@@ -292,7 +351,7 @@ func (b *BashSession) run(ctx context.Context, code, stdin string) (*bashExecuti
 		fields := strings.Fields(string(line))
 		code := 0
 		if err == nil && (len(fields) != 2 || fields[0] != id) {
-			err = fmt.Errorf("invalid bash completion")
+			err = fmt.Errorf("invalid %s completion", b.runtime)
 		}
 		if err == nil {
 			code, err = strconv.Atoi(fields[1])
@@ -302,7 +361,7 @@ func (b *BashSession) run(ctx context.Context, code, stdin string) (*bashExecuti
 		}
 		execution.mu.Lock()
 		if err != nil {
-			execution.result.Err = errors.Join(execution.result.Err, fmt.Errorf("bash completion unavailable: %w", err))
+			execution.result.Err = errors.Join(execution.result.Err, fmt.Errorf("%s completion unavailable: %w", b.runtime, err))
 		} else {
 			execution.result.Complete = true
 			execution.result.ExitCode = code
@@ -314,7 +373,7 @@ func (b *BashSession) run(ctx context.Context, code, stdin string) (*bashExecuti
 	return execution, nil
 }
 
-func (b *BashSession) Close() error {
+func (b *ProcessSession) Close() error {
 	b.stop.Do(func() {
 		b.unavailable.Store(true)
 		_ = b.cmd.Process.Kill()
@@ -327,8 +386,11 @@ func (b *BashSession) Close() error {
 	return err
 }
 
-// PID identifies the owned Bash process for the application lifecycle.
-func (b *BashSession) PID() int { return b.cmd.Process.Pid }
+// Version describes the running interpreter.
+func (b *ProcessSession) Version() string { return b.version }
+
+// PID identifies the owned process for the application lifecycle.
+func (b *ProcessSession) PID() int { return b.cmd.Process.Pid }
 
 func channelClosed(ch <-chan struct{}) bool {
 	select {

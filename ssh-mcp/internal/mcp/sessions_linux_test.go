@@ -18,11 +18,11 @@ import (
 // The protocol fixtures run without the application daemon's task registry.
 type sessionFixture struct {
 	mu       sync.Mutex
-	sessions map[string]*BashSession
+	sessions map[string]*ProcessSession
 }
 
 func newSessionFixture() *sessionFixture {
-	return &sessionFixture{sessions: make(map[string]*BashSession)}
+	return &sessionFixture{sessions: make(map[string]*ProcessSession)}
 }
 
 func (f *sessionFixture) Open(ctx context.Context, in OpenInput) (Session, error) {
@@ -47,7 +47,7 @@ func (f *sessionFixture) List(_ context.Context, in OpenInput) (Sessions, error)
 	return result, nil
 }
 
-func (f *sessionFixture) session(id string) *BashSession {
+func (f *sessionFixture) session(id string) *ProcessSession {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.sessions[id]
@@ -346,5 +346,14 @@ func TestRPCRejectsMismatchedRelease(t *testing.T) {
 	sessions, _ := m.List(context.Background(), OpenInput{})
 	if len(sessions.Sessions) != 0 {
 		t.Fatal("mismatched request created a session")
+	}
+}
+
+func TestHelloReportsSupportedProtocolOnMismatch(t *testing.T) {
+	result := Dispatch(context.Background(), nil, Request{
+		Method: "hello", Protocol: ProtocolVersion + 1,
+	}, "1.2.3")
+	if result.Error == "" || result.Version != "1.2.3" || result.Protocol != ProtocolVersion {
+		t.Fatalf("expected protocol mismatch with remote version details, got %+v", result)
 	}
 }
