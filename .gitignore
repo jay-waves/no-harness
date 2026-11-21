@@ -8,3 +8,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Local experiment downloads, binaries, and raw results
+/experiments/.work/
+/experiments/results/

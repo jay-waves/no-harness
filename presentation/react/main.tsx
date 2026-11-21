@@ -6,6 +6,7 @@ import 'reveal.js/reveal.css'
 import 'katex/dist/katex.css'
 import '../styles/index.css'
 import content from '../slides.md?raw'
+import { MemoryFootprint } from './MemoryFootprint'
 const MermaidDiagram = lazy(() => import('./MermaidDiagram').then(module => ({ default: module.MermaidDiagram })))
 
 // Vite bundles the same diagram sources used by the proposal.
@@ -18,6 +19,16 @@ function Presentation() {
   return <><Deck deckRef={deck} onReady={api => setCurrent(api.getIndices().h + 1)} onSlideChange={() => setCurrent((deck.current?.getIndices().h ?? 0) + 1)} config={{ width: 980, height: 552, hash: true, center: false, transition: 'none', slideNumber: false, controls: false }}>
     {pages.map((page, index) => {
       const diagram = page.match(/^<!-- diagram: ([\w-]+\.mmd) -->$/m)
+      if (page.includes('<!-- chart: memory-footprint -->')) {
+        const [body, notes] = page.split('Notes:')
+        const title = body.match(/^# (.+)$/m)?.[1]
+        const caption = body.match(/<p class="caption">(.+?)<\/p>/)?.[1]
+        return <Slide key={index} notes={notes?.trim()}>
+          <h1>{title}</h1>
+          <MemoryFootprint />
+          {caption && <p className="caption">{caption}</p>}
+        </Slide>
+      }
       if (!diagram) return <Markdown key={index}>{page}</Markdown>
       const source = diagrams[`../../${diagram[1]}`]
       if (typeof source !== 'string') throw new Error(`Missing diagram source: ${diagram[1]}`)
@@ -25,7 +36,7 @@ function Presentation() {
       const eyebrow = page.match(/<p class="eyebrow">(.+?)<\/p>/)?.[1]
       const caption = page.match(/<p class="caption">(.+?)<\/p>/)?.[1]
       return <Slide key={index} notes={page.split('Notes:')[1]?.trim()}>
-        <p className="eyebrow">{eyebrow}</p>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
         <Suspense fallback={<p role="status">Loading diagram…</p>}><MermaidDiagram source={source.trim()} /></Suspense>
         {caption && <p className="caption">{caption}</p>}

@@ -1,13 +1,13 @@
-flowchart LR
-    A["One local agent<br/>Shared context and API config"] --> B["Shell commands<br/>Text results enter context"]
+flowchart TD
+    A["Local agent<br/>Shared context"] --> B["Shell commands"]
     subgraph SSH[SSH host]
-        S1["Call 1: new process<br/>Load data; sum; exit"] -. Next invocation .-> S2["Call 2: new process<br/>Reload data; mean; exit"]
+        S1["New process<br/>Load data, sum"] -.-> S2["New process<br/>Reload, mean"]
     end
     subgraph Docker[Docker container]
-        D1["Call 1: new process<br/>Load data; sum; exit"] -. Next invocation .-> D2["Call 2: new process<br/>Reload data; mean; exit"]
+        D1["New process<br/>Load data, sum"] -.-> D2["New process<br/>Reload, mean"]
     end
     subgraph WSL[WSL environment]
-        W1["Call 1: new process<br/>Load data; sum; exit"] -. Next invocation .-> W2["Call 2: new process<br/>Reload data; mean; exit"]
+        W1["New process<br/>Load data, sum"] -.-> W2["New process<br/>Reload, mean"]
     end
     B -->|ssh lab| S1
     B -->|docker exec nlp| D1

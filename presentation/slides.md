@@ -11,6 +11,28 @@ This deck presents the proposed design and evaluation from proposal.md.
 
 ---
 
+# One gateway for many devices and providers
+
+<div class="split">
+<div>
+<h2>N edge devices</h2>
+<p>Robots, Android phones, Arduino boards, and Raspberry Pis.</p>
+</div>
+<div>
+<h2>M providers and integrations</h2>
+<p>DeepSeek, Claude Code, ChatGPT, and network proxy providers.</p>
+</div>
+</div>
+
+<p class="takeaway">Up to <strong>N × M</strong> device–provider configurations become <strong>N + M</strong> gateway integrations, with one place for configuration, audit logs, and access rules.</p>
+
+<p class="caption">Inspired by LLM gateways and network proxy gateways such as Clash.</p>
+
+Notes:
+The N + M model counts one integration per device and provider. The prototype currently targets Linux over SSH. Other devices and providers illustrate the motivation and would need appropriate adapters.
+
+---
+
 # Where should the agent run?
 
 | Design | Agent deployment | State across calls |
@@ -92,19 +114,47 @@ Model API access stays local. Workload traffic follows the target network. The p
 
 ---
 
-# Session behavior across calls
+# Per-target deployment footprint
 
-| When | Proposed behavior |
-| --- | --- |
-| Open a session | Reuse a target channel and apply its runtime, working directory, and environment profile |
-| Execute code | Run Python or shell subprocesses with explicit working directories and environment settings |
-| Reconnect | Check the execution ID and retrieve output from a live worker |
-| Interrupt or reset | Interrupt work through the shared interface; invalidate stored objects after a kernel restart |
+| Unpacked footprint | Standalone Codex | SSH MCP worker |
+| --- | ---: | ---: |
+| Added to each target | **478.09 MiB** | **9.17 MiB** |
+| Total with Alpine, Python, and OpenSSH | 527.85 MiB | 58.94 MiB |
+| Total with the C toolchain | 714.89 MiB | 245.97 MiB |
 
-<p class="caption">Controlled tests will bound execution with container permissions and resource limits.</p>
+Four scripted checks passed through the worker. We read and wrote a file, compiled C, analyzed CSV data, and verified an SSH service configuration.
+
+<p class="caption">Both targets use the same task dependencies. Full Codex runs on the client in the worker design.</p>
 
 Notes:
-Execution IDs enable status and output retrieval after reconnect, avoiding blind retries.
+Unpacked Linux x86-64 footprint. Codex 0.170.0 official musl bundle versus a stripped static ssh-mcp 0.2.0 build. The bundle includes helpers and resources. The two task routes used deterministic scripts, without model inference. Codex startup was checked separately. Docker carried the worker bridge. See REPORT.md for the exact measurements and the official release link.
+
+---
+
+# Headless CLI and worker memory
+
+<!-- chart: memory-footprint -->
+
+<p class="caption">Five samples per setup on Alpine. Codex exec awaits a local mock response. Both Python processes hold a 100,000-integer list. The worker runs Python inside its session.</p>
+
+Notes:
+Values are median proportional set size (PSS) by component from Linux procfs. The Codex-side Python process is a separately launched workload control. The stack totals sum component medians. Python excludes the separately shown musl mappings. The target bridge and daemon are separate processes. Neither sampled process tree contained Node.js, glibc, or a live shell process. Rootfs size is measured on the previous slide.
+
+---
+
+# How ssh-mcp runs a code block
+
+Codex calls a local MCP server. An SSH bridge forwards the request to a worker on the target.
+
+| Step | What happens |
+| --- | --- |
+| Open | Choose Bash or Python and receive a session ID, version, and environment summary. |
+| Execute | Send a code block to the same interpreter. The next block can reuse its state. |
+| Read | Use the execution ID and a cursor to retrieve stdout and stderr. |
+| Reconnect | Find the live session and continue where the previous connection left off. |
+
+Notes:
+The per-user worker owns the interpreter processes and listens on a private Unix socket. The SSH bridge can disconnect while the worker stays alive. Closing a session and opening a new one starts a fresh interpreter.
 
 ---
 
@@ -151,15 +201,18 @@ An inconclusive comparison leaves comparable quality unestablished.
 
 ---
 
-# Prior work and project deliverables
+# Project contribution and related work
 
-| Prior work | Connection to the design |
+**ssh-mcp** keeps Bash and Python sessions alive across SSH reconnects.
+
+Three-turn CSV task **113.98 → 61.02 ms**. Worker deployment **9.17 MiB per target**, versus **478.09 MiB** for the full Codex CLI bundle.
+
+| Related work | Public release |
 | --- | --- |
-| [CodeAct](https://arxiv.org/abs/2402.01030) | Executable code as an action interface |
-| [Code Mode](https://developers.cloudflare.com/agents/tools/codemode/) | Tool operations composed in code |
-| [smolagents](https://huggingface.co/docs/smolagents/en/tutorials/secure_code_execution) | Remote code executors |
+| [DeepSeek Harness SSH](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.2) | Oct. 9, 2026 · v0.2.1-alpha.2. Code Mode over SSH through a custom profile. |
+| [Codex exec-server](https://github.com/openai/codex/releases/tag/rust-v0.170.0) | Nov. 18, 2026 · v0.170.0 **[Experimental]**. Released after the course proposal took shape. |
 
-The project will deliver a prototype, reproducible tasks, and an evaluation of when persistent remote execution reduces cost while preserving success and simplifying setup.
+<p class="caption">Lightweight remote execution is an emerging design direction. Broad adoption has yet to be established.</p>
 
 Notes:
-The evaluation and prototype are proposed deliverables.
+The CSV pilot used warm loopback SSH. The deployment figures compare the worker with the full Codex CLI bundle. The proposal milestone refers to when the course idea took shape.

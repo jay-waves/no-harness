@@ -6,7 +6,7 @@ COMP7607A Natural Language Processing Project
 
 The proposal links to the Mermaid sources rendered in the presentation.
 
-The repository contains the proposal, its [course presentation](presentation/README.md), and an initial [SSH MCP implementation](ssh-mcp/README.md) with persistent Bash sessions and SFTP file copying. The proposed persistent Python REPL, Docker and WSL adapters, reproducible tasks, and evaluation remain planned deliverables.
+The [SSH MCP prototype](ssh-mcp/README.md) supports persistent Bash and Python sessions on Linux, a version handshake with remote system metadata, and SFTP file copying. The [report](REPORT.md) records public harness resource measurements and a loopback SSH pilot. The [course presentation](presentation/README.md) covers the proposed design. Docker and WSL adapters and evaluation across hosts are planned.
 
 ## GitHub Actions
 

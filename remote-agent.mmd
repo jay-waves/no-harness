@@ -1,15 +1,15 @@
-flowchart LR
+flowchart TD
     U[User] --> A
     U --> B
     U --> C
     subgraph SSH[SSH host]
-        A["Full agent<br/>Own context and API config"] --> AT[Local tools and files]
+        A["Full agent<br/>Own context + API"] --> AT[Tools and files]
     end
     subgraph Docker[Docker container]
-        B["Full agent<br/>Own context and API config"] --> BT[Local tools and files]
+        B["Full agent<br/>Own context + API"] --> BT[Tools and files]
     end
     subgraph WSL[WSL environment]
-        C["Full agent<br/>Own context and API config"] --> CT[Local tools and files]
+        C["Full agent<br/>Own context + API"] --> CT[Tools and files]
     end
     A -. Model requests .-> M[Model API]
     B -. Model requests .-> M

@@ -59,7 +59,10 @@ html, body, #root { height: 100%; margin: 0; background: var(--color-background)
 .reveal .slides > section:first-child h2 { font-size: 34px; line-height: 1.2; }
 .reveal .slides > section:first-child .caption { margin-top: 28px; font-size: 14px; }
 .reveal .progress { color: var(--color-accent); height: 3px; }
-/* Editable Mermaid source, rendered locally by Pele. */
+/* Mermaid diagram slides. */
+.reveal .slides > section:has(.diagram) { padding: 16px 28px; }
+.reveal section:has(.diagram) h1 { margin-bottom: 8px; }
+.reveal section:has(.diagram) .caption { margin: 8px 0 0; }
 .diagram {
   --pele-bg: var(--color-background);
   --pele-fg: var(--color-text);
@@ -76,15 +79,10 @@ html, body, #root { height: 100%; margin: 0; background: var(--color-background)
   --pele-font: var(--font-presentation);
   --pele-font-mono: var(--font-presentation);
   --pele-radius: 0;
-  width: 100%; height: 290px;
+  width: 100%; height: 420px;
   display: flex; align-items: center; justify-content: center;
 }
-.diagram .pele { max-width: 100%; max-height: 290px; }
-.diagram-figure { margin: 0; position: relative; }
-.diagram-figure details { font-size: 13px; }
-.diagram-figure summary { color: var(--color-primary); cursor: pointer; }
-.diagram-figure details[open] { position: absolute; inset: 0; z-index: 2; background: var(--color-background); border: 1px solid var(--color-border); padding: 12px; overflow: auto; }
-.diagram-figure pre { font: 16px var(--font-presentation); white-space: pre-wrap; }
+.diagram .pele { max-width: 100%; max-height: 100%; }
 .deck-navigation { position: fixed; right: 20px; bottom: 16px; z-index: 40; display: flex; align-items: center; gap: 4px; padding: 3px 5px; background: var(--color-background); color: var(--color-primary); font: 13px var(--font-presentation); }
 .deck-navigation button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .deck-navigation button:hover:not(:disabled) { background: var(--color-unknown); }
@@ -92,15 +90,25 @@ html, body, #root { height: 100%; margin: 0; background: var(--color-background)
 .deck-navigation svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .deck-navigation output { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
 .deck-navigation output span { color: var(--color-text); }
-button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 4px; }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
-@media print { .deck-navigation, .diagram-figure details { display: none; } }
+@media print { .deck-navigation { display: none; } }
 
 .reveal .slides > section:first-child :is(h1,h2,.eyebrow) { color: var(--color-on-primary); }
-.reveal .slides > section:nth-last-child(2) { background: var(--color-primary); color: var(--color-on-primary); }
-.reveal .slides > section:nth-last-child(2) :is(h1,.eyebrow,.closing-lines span) { color: var(--color-on-primary); }
 
 /* KaTeX owns math fonts and metrics; prose retains Georgia. */
 .reveal .equation .katex { font-size: 1em; }
 .reveal .equation .katex-display { margin: 0; text-align: left; }
 .reveal .equation .katex-display > .katex { text-align: left; }
+
+.memory-footprint { display: grid; grid-template-columns: 2fr 3fr; gap: 24px; align-items: center; }
+.memory-footprint svg { width: 100%; fill: var(--color-text); font: 16px var(--font-presentation); }
+.memory-footprint table { margin: 0; font-size: 17px; font-variant-numeric: tabular-nums; }
+.memory-footprint :is(th, td) { padding: 8px 10px; }
+.memory-footprint :is(th, td):not(:first-child) { text-align: right; }
+.memory-swatch { display: inline-block; width: 11px; height: 11px; margin-right: 8px; }
+.memory-swatch-indigo { background: var(--tol-indigo); }
+.memory-swatch-wine { background: var(--tol-wine); }
+.memory-swatch-rose { background: var(--tol-rose); }
+.memory-swatch-teal { background: var(--tol-teal); }
+.memory-swatch-sand { background: var(--tol-sand); }

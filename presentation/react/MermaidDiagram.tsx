@@ -10,16 +10,14 @@ export function MermaidDiagram({ source }: { source: string }) {
     if (!host.current) return
     // Only repository-authored Mermaid is rendered; Pele handles SVG generation.
     const diagram = mount(host.current, source, {
-      maxWidth: 900,
+      maxWidth: 924,
       autoDirection: false,
-      fontSize: 20,
-      padding: 20,
+      config: { flowchart: { nodeSpacing: 16, rankSpacing: 20 } },
+      fontSize: 24,
+      padding: 8,
       zoom: false,
     })
     return () => diagram.destroy()
   }, [source])
-  return <figure className="diagram-figure">
-    <div ref={host} className="diagram" />
-    <details><summary>View Mermaid source</summary><pre>{source}</pre></details>
-  </figure>
+  return <div ref={host} className="diagram" />
 }
