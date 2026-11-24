@@ -128,3 +128,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--color-accent); 
 .codex-bundle-total { font-size: 31px; font-weight: 700; fill: var(--color-primary); }
 .codex-bundle-value { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .codex-bundle-os { font-size: 15px; }
+
+.command-comparison { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 24px; }
+.reveal .command-comparison table { width: 100%; margin: 0; }
+.reveal .command-comparison :is(td, th) { padding: 4px 8px; font-size: 18px; }
+.reveal .command-comparison :is(td, th):nth-child(n+2) { text-align: right; }
+.command-comparison svg { width: 100%; font: 15px var(--font-presentation); }
+.reveal .slides > section:has(.command-comparison) { padding: 20px 34px; }
+.reveal section:has(.command-comparison) h1 { font-size: 36px; margin-bottom: 12px; }

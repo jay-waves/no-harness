@@ -7,10 +7,11 @@ import 'katex/dist/katex.css'
 import '../styles/index.css'
 import content from '../slides.md?raw'
 import { MemoryFootprint } from './MemoryFootprint'
+import { CommandTokens } from './CommandTokens'
 import { CodexBundle } from './CodexBundle'
 const diagrams = import.meta.glob('../diagrams/*.d2', { eager: true, query: '?diagram', import: 'default' })
 const pages = content.trim().split(/^---\s*$/m)
-const charts = { 'memory-footprint': MemoryFootprint, 'codex-bundle': CodexBundle }
+const charts = { 'command-tokens': CommandTokens, 'memory-footprint': MemoryFootprint, 'codex-bundle': CodexBundle }
 
 function Presentation() {
   const deck = useRef<RevealApi | null>(null)
@@ -18,7 +19,7 @@ function Presentation() {
   return <><Deck deckRef={deck} onReady={api => setCurrent(api.getIndices().h + 1)} onSlideChange={() => setCurrent((deck.current?.getIndices().h ?? 0) + 1)} config={{ width: 980, height: 552, hash: true, center: false, transition: 'none', slideNumber: false, controls: false }}>
     {pages.map((page, index) => {
       const diagram = page.match(/^<!-- diagram: ([\w-]+\.d2) -->$/m)
-      const chart = page.match(/^<!-- chart: (memory-footprint|codex-bundle) -->$/m)
+      const chart = page.match(/^<!-- chart: (memory-footprint|codex-bundle|command-tokens) -->$/m)
       if (chart) {
         const Chart = charts[chart[1] as keyof typeof charts]
         const [body, notes] = page.split('Notes:')

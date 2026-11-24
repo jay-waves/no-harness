@@ -76,7 +76,7 @@ The direct baseline can still reuse SSH connections and running containers, batc
 <!-- diagram: direct-execution.d2 -->
 <!-- alt: The user starts the local agent, which invokes SSH, docker exec, and wsl --exec through a PowerShell launcher. Python commands on the SSH host, Node.js commands in Docker, and shell commands in WSL each start a fresh process. -->
 
-<p class="caption">In PowerShell, docker exec nlp bash -c 'node --version && hostname' crosses three encoding and decoding layers. PowerShell unwraps the quoted script, Docker sends it in its JSON argument list, and Bash interprets && in the container.</p>
+<p class="caption">In PowerShell, docker exec nlp bash -c 'node --version && hostname' passes through three stages. PowerShell parses the quoted argument, Docker encodes the argument list as JSON, and Bash interprets && in the container.</p>
 
 Notes:
 PowerShell passes the single-quoted script as one argument. The Docker CLI serializes the argument list in the Exec API request, and the Docker Engine decodes it. Bash reads the argument after -c as shell source and runs hostname only if node --version succeeds. See the PowerShell quoting rules (https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules) and the Docker exec reference (https://docs.docker.com/reference/cli/docker/container/exec/).
@@ -112,6 +112,34 @@ The per-user worker owns the interpreter processes and listens on a private Unix
 ---
 
 <h1 class="chapter-title">Experiments</h1>
+
+---
+
+# Experiment 1 · 22.8% fewer Python tokens with a REPL
+
+<!-- chart: command-tokens -->
+
+<p class="caption">Six scripted tasks, four questions each. All 48 answers passed. Independent commands used 35 tokens on either path.</p>
+
+Notes:
+Direct SSH reused the authenticated connection and started fresh Python for every question. Each SSH task used the cheaper of repeating its setup or saving and importing a helper. The persistent Python REPL submitted setup once. Both arms used identical expressions and answer formats. Token counts cover submitted Python only, measured with o200k_base. Connection tuples and interpreter PIDs were verified. The graph sums the cumulative counts across all six tasks after each question. Source: experiments/command_token_suite.py and REPORT.md, Experiment 1.
+
+---
+
+# Experiment 2 · How the script reaches Bash
+
+For the same **1,177-byte script**, sending the source on stdin reduced the Docker ExecCreate JSON body from **1,609 to 169 bytes**.
+
+| Measured at the Docker daemon | Inline argument | Standard input |
+| --- | ---: | ---: |
+| Entire ExecCreate JSON body | 1,609 B | 169 B |
+| Encoded Cmd array inside the body | 1,453 B | 13 B |
+| Script bytes sent separately on stdin | 0 B | 1,177 B |
+
+Across five scripts, the model used **449 command + stdin tokens** with ∅ne, **484** with PowerShell → SSH, and **489** with PowerShell → Docker. All 15 free-choice calls passed on the first attempt.
+
+Notes:
+The top table comes from fixed replays capturing the actual HTTP body at the local Docker socket. Cmd is part of that body. When stdin carries the script, its bytes still cross the transport. The token comparison comes from a separate live trial using gpt-6.2-sol at low reasoning. Both PowerShell paths chose stdin on all five fixtures, while ∅ne sent Bash directly. The model could also save and run a target script. These are submitted payload tokens, excluding the provider envelope. Source: REPORT.md, Model-generated PowerShell wrappers.
 
 ---
 
