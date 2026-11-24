@@ -8,20 +8,28 @@ results="$here/results"
 mkdir -p "$work" "$results"
 
 case "${1:-}" in
-  loopback)
-    python3 - "$repo" "$here" > "$work/overlay.json" <<'PY'
+  loopback|serialization)
+    case "$1" in
+      loopback) test_name=TestExecutionPilot ;;
+      serialization) test_name=TestSerializationPilot ;;
+    esac
+    overlay=$(mktemp)
+    trap 'rm -f "$overlay"' EXIT
+    python3 - "$repo" "$here" "$1" > "$overlay" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-repo, experiments = map(Path, sys.argv[1:])
+repo, experiments = map(Path, sys.argv[1:3])
+source = sys.argv[3] + "_test.go"
 print(json.dumps({"Replace": {
-    str(repo / "ssh-mcp" / "execution_pilot_test.go"): str(experiments / "loopback_test.go"),
+    str(repo / "ssh-mcp" / source): str(experiments / source),
 }}))
 PY
     cd "$repo/ssh-mcp"
     NO_HARNESS_PILOT_OUTPUT="$results/loopback.json" \
-      go test -overlay "$work/overlay.json" -mod=readonly -run '^TestExecutionPilot$' -count=1 -v .
+    ONE_SERIALIZATION_OUTPUT="$results/serialization.json" \
+      go test -overlay "$overlay" -mod=readonly -run "^$test_name\$" -count=1 -v .
     ;;
   footprint)
     archive="$work/codex.tar.gz"
@@ -56,7 +64,7 @@ PY
     done
     ;;
   *)
-    printf 'Usage: %s {loopback|footprint}\n' "$0" >&2
+    printf 'Usage: %s {loopback|footprint|serialization}\n' "$0" >&2
     exit 2
     ;;
 esac

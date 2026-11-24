@@ -24,9 +24,9 @@ The model can still be hosted by an external API; the duplicated components are 
 
 ### A local agent invoking remote commands
 
-A local agent can instead use SSH, `docker exec`, or `wsl --exec`. This centralizes agent configuration, but each invocation launches a command process. When each call starts a fresh interpreter, imports, loaded data, and other in-memory objects must be reconstructed. Wrapper syntax, quoting, and environment selection also become part of the agent's generated commands.
+A local agent can instead use SSH, `docker exec`, or `wsl --exec` through a local shell such as PowerShell. This centralizes agent configuration, but each invocation launches a command process. When each call starts a fresh interpreter, imports, loaded data, and other in-memory objects must be reconstructed. Wrapper syntax, quoting, and environment selection also become part of the agent's generated commands.
 
-[A local agent invokes separate command processes in SSH, Docker, and WSL environments.](direct-execution.mmd)
+[A local agent uses a PowerShell launcher to invoke separate command processes in SSH, Docker, and WSL environments.](direct-execution.mmd)
 
 For example, `docker exec nlp python3 sum.py` followed by `docker exec nlp python3 mean.py` starts two interpreters. In this example, each script loads the same dataset. The dotted arrows show successive invocations, not shared memory. SSH and WSL follow the same pattern.
 
@@ -82,6 +82,16 @@ We will run 24 checkable tasks three times per configuration: 216 runs covering 
 | Easier configuration | Setup time, manual steps, and configuration changes, including proxy-required targets and targets without model API access. |
 
 Fixed-code benchmarks will isolate process startup and data-loading costs from model latency. Disabling persistence while retaining Code Mode will separate state reuse from batching. We will vary follow-up count and data size to measure context growth.
+
+The first task pilots vary interpreter persistence and tool-output size independently. File-backed tasks provide a control for state that survives either mode. Repeated questions over DataBench tables test reuse of loaded data, and small HumanEval cases check generated code against published tests. The task verifier checks artifacts and regressions at each configuration. Replay token counts test a fixed transcript layout. A matched model pilot records provider input, cached input, and output tokens to measure usage when the model chooses its own code. [Pilot results](REPORT.md#task-quality-and-context-growth)
+
+A separate two-target pilot compares direct SSH, direct Docker exec, and ∅ne MCP over SSH with one local model. It uses shared task fixtures and reports provider tokens, verified outcomes, and target action time alongside controller wall time. The full agent installed on each target remains part of the planned comparison. [Two-target pilot](REPORT.md#agent-tasks-over-ssh-docker-and-∅ne)
+
+The telemetry follow-up study adds a matched upfront control and a seven-checkpoint workflow with a missing parameter and a late data revision. Its primary measurements are model tokens, sampled target and controller RSS, and bytes at each transport boundary. [Telemetry benchmark](REPORT.md#progressively-disclosed-telemetry-benchmark)
+
+Experiment 1 compares submitted Python tokens on multiplexed SSH with fresh interpreters and on a persistent remote Python REPL across six four-question tasks. [Task-level measurements and curves](REPORT.md#experiment-1-command-tokens-over-ssh-and-a-persistent-python-repl)
+
+The repeated-query supplement measures logical source and cache I/O alongside target RSS, using the same joined representation in memory and on disk. A separate PowerShell supplement measures how the choice of inline arguments or stdin changes model-generated command tokens and the actual Docker ExecCreate JSON body. [Repeated queries](REPORT.md#repeated-queries-against-a-remote-join) · [PowerShell wrappers](REPORT.md#model-generated-powershell-wrappers)
 
 Success-rate differences will use paired comparisons with confidence intervals clustered by task. A five-percentage-point non-inferiority margin will be fixed in advance; inconclusive results will not establish equal quality. Failure analysis will cover stale state, disconnects, timeouts, and resets.
 

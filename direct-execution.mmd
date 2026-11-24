@@ -1,5 +1,5 @@
 flowchart TD
-    A["Local agent<br/>Shared context"] --> B["Shell commands"]
+    A["Local agent<br/>Shared context"] --> B["PowerShell launcher"]
     subgraph SSH[SSH host]
         S1["New process<br/>Load data, sum"] -.-> S2["New process<br/>Reload, mean"]
     end

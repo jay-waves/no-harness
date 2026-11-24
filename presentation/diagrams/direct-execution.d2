@@ -4,6 +4,7 @@ agent: "Local agent\nShared context" {
   class: control
   icon: https://deck-icons.invalid/codex.svg
 }
+launcher: "PowerShell\nlauncher" {class: control}
 ssh: "SSH host" {
   class: boundary
   icon: https://deck-icons.invalid/linux.svg
@@ -68,6 +69,7 @@ wsl: "WSL environment" {
   first -> second {class: transport}
 }
 user -> agent {class: transport}
-agent -> ssh.first: ssh {class: transport}
-agent -> docker.first: docker exec {class: transport}
-agent -> wsl.first: wsl --exec {class: transport}
+agent -> launcher {class: transport}
+launcher -> ssh.first: ssh {class: transport}
+launcher -> docker.first: docker exec {class: transport}
+launcher -> wsl.first: wsl --exec {class: transport}

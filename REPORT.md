@@ -6,7 +6,7 @@ Yu, Jiawei · 3036809907
 
 ## Abstract
 
-This project keeps the Codex CLI on a controller and moves execution to persistent Bash and Python sessions on remote targets. Three pilots measured execution latency, deployment size, and memory. In the three-turn CSV task, a persistent Python session parsed the input once and reduced total execution time from 113.98 ms to 61.02 ms, including session initialization. On Alpine, the worker added 9.17 MiB per target, compared with 478.09 MiB for the official standalone Codex bundle. At the sampled headless checkpoint, the worker-side processes used 22,733 KiB PSS, compared with 156,328 KiB for the Codex CLI and a matched Python workload on the target. Scripted checks covered file I/O, C compilation, CSV analysis, and SSH configuration.
+This project keeps the Codex CLI on a controller and moves execution to persistent Bash and Python sessions on remote targets. The pilots measured execution and command-launch latency, serialization, deployment size, and memory. In the three-turn CSV task, a persistent Python session parsed the input once and reduced total execution time from 113.98 ms to 61.02 ms, including session initialization. On Alpine, the worker added 9.17 MiB per target, compared with 478.09 MiB for the official standalone Codex bundle. At the sampled headless checkpoint, the worker-side processes used 22,733 KiB PSS, compared with 156,328 KiB for the Codex CLI and a matched Python workload on the target. Scripted checks covered file I/O, C compilation, CSV analysis, and SSH configuration.
 
 ## Project inspiration
 
@@ -20,11 +20,11 @@ The controller is the natural place for model credentials, target profiles, acce
 
 Can one local Codex instance operate remote environments through thin workers with less per-target deployment overhead? When does a persistent shell or Python session improve remote execution over running each command in a fresh process?
 
-The [proposal](proposal.md) describes the broader design for SSH, Docker, and WSL. This report records public harness measurements and a loopback SSH pilot. The SSH prototype supports persistent Bash and Python sessions, a version handshake with remote system metadata, execution IDs, bounded output reads, reconnecting to live sessions, and SFTP. [∅ne implementation](ssh-mcp/README.md)
+The [proposal](proposal.md) describes the broader design for SSH, Docker, and WSL. This report records public harness measurements and scripted pilots for loopback SSH, command dispatch, deployment size, and memory. The SSH prototype supports persistent Bash and Python sessions, a version handshake with remote system metadata, execution IDs, bounded output reads, reconnecting to live sessions, and SFTP. [∅ne implementation](ssh-mcp/README.md)
 
 ## Implementation
 
-The prototype was renamed from `ssh-mcp` to ∅ne after the reported pilots; the measurements below used the pre-rename 0.2.0 executable. The implementation and protocol are the same.
+The loopback SSH and deployment pilots used the pre-rename `ssh-mcp` 0.2.0 executable. The command-serialization pilot used the renamed ∅ne executable and the same worker protocol.
 
 Codex talks to a local `one` process through MCP. The client opens an SSH channel to a bridge on the target, which relays requests to a worker over a private Unix socket. The worker starts on first use and owns the interpreter processes. When the SSH channel closes, the worker can keep those processes and their state alive.
 
@@ -110,9 +110,208 @@ Values are medians of five per-trial totals. Session opens on warm transports to
 
 The CSV fixture contained one integer per line from 1 to 100,000, with a trailing newline after each integer. Its SHA-256 was `b2bc7d3f8b652d2ec96865b68ad8f80e22cca174abe1aed7889e242a747d590f`. The expected results were a count of 100,000, a sum of 5,000,050,000, and a count of 50,000 above the threshold of 50,000. All modes used the same Python parser, list representation, and calculations. Exec once and Bash parsed three times, while Python parsed once. Python's warm turn medians were 23.93, 2.15, and 4.22 ms. The three-turn total was 73% shorter than exec once on warm transports and 46% shorter when including the Python session open. Target-only memory and session storage growth were unmeasured in this loopback run. The pilot supports an execution-overhead comparison for these fixtures. External-host performance and Codex task outcomes remain open.
 
+## Task quality and context growth
+
+The task pilot crosses two choices independently. Python either starts fresh per action or reuses a ∅ne session. The controller either receives the answer and diagnostic records or receives only the line containing the answer. Each case has three stages. The verifier checks exact typed JSON answers and unchanged input files. Repair tasks also run held-out tests in a fresh process. All runs use disposable containers with the same Python image. [Experiment setup and plotting commands](experiments/README.md#task-quality-and-context-growth)
+
+Fresh and persistent modes ran the same calculations. The fresh reference reloaded inputs for stateful tasks, while the persistent reference loaded once. Both modes could preserve files. Full and bounded output used the same code within each mode. The replay counted code and result tokens with `o200k_base` and summed the input at two scripted model requests per stage. History remained visible throughout. These are simulated requests with real executed tool actions.
+
+| Replay conditions | After stage 1 | After stage 2 | After stage 3 | All checks passed |
+| --- | ---: | ---: | ---: | ---: |
+| Fresh, full output | 484 | 1,777 | 3,873 | 24/24 |
+| Persistent, full output | 484 | 1,755 | 3,783 | 24/24 |
+| Fresh, bounded output | 288 | 992 | 2,103 | 24/24 |
+| Persistent, bounded output | 288 | 970 | 2,013 | 24/24 |
+
+These means cover six fixtures each for independent file inventory, CSV follow-ups, a normalizer repair, and two-ledger reconciliation. Persistence saved 90 cumulative tokens on average by avoiding repeated setup code. The paired difference was zero for inventory and repair, 140 for analysis, and 220 for reconciliation. Returning the answer alone saved about 1,769 cumulative tokens on average under either execution mode. The full-output reference deliberately includes diagnostic records, so the size of that gain depends on what the task needs the model to inspect.
+
+| Published task subset | Fresh / persistent, full | Fresh / persistent, bounded | Verified runs |
+| --- | ---: | ---: | ---: |
+| DataBench Forbes, three questions on one table | 19,648 / 19,516 | 2,074 / 1,942 | 4/4 |
+| DataBench Titanic, three questions on one table | 27,884 / 27,748 | 1,874 / 1,738 | 4/4 |
+| HumanEval/0, typed examples and published tests | 3,658 / 3,658 | 3,658 / 3,658 | 4/4 |
+| HumanEval/1, typed examples and published tests | 3,726 / 3,726 | 3,726 / 3,726 | 4/4 |
+
+DataBench uses published questions and answer keys from full tables, with only the required columns retained. The HumanEval canaries reuse a file and return one line per stage, so they have no replay token difference. These subsets test different mechanisms. Their results do not estimate full-benchmark performance. [DataBench paper](https://aclanthology.org/2024.lrec-main.1179/) · [HumanEval paper](https://arxiv.org/abs/2107.03374)
+
+The 112 reference runs establish that the paired scripts and output policies can produce the required artifacts on these tasks. They do not estimate autonomous task success. Time in the replay includes Docker exec on the fresh path and worker RPC on the persistent path. The CSV loopback pilot is the separate measurement of parser reuse on warm SSH transports.
+
+### Model-chosen actions on DataBench
+
+Codex CLI 0.169.1 with `gpt-6.2-sol` at low reasoning produced one Python action for each newly revealed question. The controller included earlier actions and tool results in each prompt, and the same verifier scored both paths. All four DataBench trajectories completed with correct answers at all 12 checkpoints and unchanged inputs. A paired inventory smoke test also passed all six checkpoints. The DataBench figures below come from six provider requests per arm and exclude the smoke test.
+
+| Metric across both DataBench tables | Fresh Python | Persistent ∅ne Python |
+| --- | ---: | ---: |
+| Correct answers | 6/6 | 6/6 |
+| Provider input, including cached tokens | 106,439 | 106,496 |
+| Provider cached input | 48,768 | 16,256 |
+| Provider output | 1,256 | 1,260 |
+| Submitted Python code, offline token count | 1,084 | 1,082 |
+| Visible tool results, offline token count | 138 | 138 |
+
+Both arms returned similarly compact results and consumed nearly the same provider input. Cache hits varied by request and were not controlled, so the cached counts do not establish a billing effect. The controlled replay shows how diagnostic output can dominate context growth and where repeated setup code adds tokens. The model pilot provides no evidence of a token reduction when both paths already return compact answers. With two tables and one trajectory per arm and table, success-rate equivalence remains untested.
+
+## Agent tasks over SSH, Docker, and ∅ne
+
+Each trial started two isolated Linux containers from the same image, with separate east and west workspaces. The controller could submit Bash or Python actions on either target. Direct SSH used a warm OpenSSH connection. Direct Docker used the local daemon's `docker exec`. ∅ne used the production MCP server, real SSH, and preopened Bash and Python sessions on each target. The same controller message format, output caps, and action limits applied to all three arms. [Run the comparison](experiments/README.md#two-target-agent-comparison)
+
+The tasks combine error logs from both targets, edit and validate configuration on west and save its validation result on east, or answer three sequential questions over the same 12,000-row dataset. Verification checks each answer, the edited configuration, and unchanged input fixtures. All nine fixed-code reference trials passed. The model run additionally lets Codex choose the language, target, code, batch size, and whether another decision is needed after seeing a tool result.
+
+The agent pilot used Codex CLI 0.169.1 with `gpt-6.2-sol` at low reasoning and one run per task and path. Each path completed all three tasks and passed all ten independent checks. Provider input includes cached tokens. Task time includes model decisions and actions after fixture setup, with setup reported separately.
+
+| Across three tasks | Direct SSH | Direct Docker exec | ∅ne MCP over SSH |
+| --- | ---: | ---: | ---: |
+| Verified tasks | 3/3 | 3/3 | 3/3 |
+| Model decisions / visible actions | 5 / 7 | 5 / 7 | 5 / 7 |
+| Transport calls during actions | 7 | 7 | 12 |
+| Provider input tokens | 89,301 | 89,316 | 89,416 |
+| Provider output tokens | 1,048 | 1,240 | 1,037 |
+| Total target action time | 0.611 s | 0.623 s | 0.182 s |
+| Total task time | 44.54 s | 49.63 s | 43.37 s |
+| Total fixture and session setup time | 4.04 s | 3.51 s | 4.55 s |
+
+∅ne spent about 70% less time in target actions. Its 12 transport calls include MCP output reads managed by the controller. The model saw seven actions in every arm, and its input differed by at most 115 tokens across the three paths. Model decisions dominated wall time. The experiment measures local loopback SSH and Docker on one host. Wide-area networks and agents installed inside the targets are future comparisons.
+
+## Progressively disclosed telemetry benchmark
+
+BFCL v3 seeds a stateful environment, adds one user request at a time, and grades state and response at the end of each turn. ToolSandbox grades changes and intermediate milestones in an interactive trajectory. This benchmark applies those ideas to Bash and Python actions over real SSH, Docker exec, and ∅ne MCP. Exact artifact checks accept different valid implementations. The controller supplies the operator's replies and releases fixtures deterministically, which keeps the information available at each checkpoint identical across paths. [BFCL v3 evaluation](https://gorilla.cs.berkeley.edu/blogs/13_bfcl_v3_multi_turn.html#evaluation) · [ToolSandbox](https://arxiv.org/abs/2408.04682)
+
+The seven checkpoints require an east baseline, a cross-target baseline after the west export arrives, a clarification for an unavailable alert threshold, baseline alerts once the threshold is supplied, a late correction to west, revised combined counts, and an alert-membership diff. The correction moves one service above the threshold and another below it. Verification checks typed artifacts, preserves previous snapshots and inputs, and requires zero actions during the clarification. A failed checkpoint blocks the next release. The matched upfront control asks for the same six artifacts with all inputs and the threshold available from the first prompt. Both versions permit batching and durable caches. [Reproduce the run](experiments/README.md#progressively-disclosed-telemetry-benchmark)
+
+Codex CLI 0.169.1 with `gpt-6.2-sol` at low reasoning completed every checkpoint on every path with no retries. All three asked for clarification without running a command. The same Docker path went from one model decision and three actions upfront to seven decisions and nine actions with staged disclosure. Its longest script fell from 30 lines (1,123 bytes) to 19 lines (756 bytes). Provider input increased from 18,007 to 129,209 tokens as the controller sent the instructions and accumulated history for each decision. These are one trajectory per condition.
+
+| Staged run | Direct SSH | Docker exec | ∅ne MCP over SSH |
+| --- | ---: | ---: | ---: |
+| Passed checkpoints | 7/7 | 7/7 | 7/7 |
+| Model decisions / remote actions | 7 / 9 | 7 / 9 | 7 / 9 |
+| Longest code action | 822 B | 756 B | 645 B |
+| Provider input tokens, including cached | 129,300 | 129,209 | 129,198 |
+| Provider cached input tokens | 34,560 | 16,256 | 18,304 |
+| Provider output tokens | 1,430 | 1,377 | 1,367 |
+| Target RSS idle / peak / post-task | 26.4 / 37.0 / 27.0 MiB | 9.0 / 19.9 / 9.0 MiB | 83.6 / 94.4 / 86.0 MiB |
+| Application code, stdout, and stderr | 3,770 B | 3,629 B | 3,398 B |
+| SSH relay traffic, both directions | 8,064 B | — | 11,752 B |
+| Docker daemon API traffic, both directions | — | 76,100 B | — |
+| Local MCP JSON-RPC traffic, both directions | — | — | 13,685 B |
+
+Provider input differed by 102 tokens across the staged paths. Cache hits varied by request. Target RSS is summed across both containers. ∅ne preopened four interpreter sessions, two per target, which contributes to its larger idle footprint. Transport and Codex CLI memory are recorded separately. The codec timing sums in the local MCP client were 0.25 ms to encode and 0.38 ms to decode across the whole trajectory.
+
+All staged reference runs carried exactly 7,251 application bytes and passed the same 21 checkpoints. Direct SSH carried 11,664 bytes at the relay. ∅ne carried 16,344 bytes at the same boundary and 18,413 bytes at local MCP stdio. Docker moved 79,932 bytes at the daemon socket. Each count describes its own boundary. SSH and MCP counts for ∅ne overlap. The experiment measures command and result I/O, while source file read bytes and Docker daemon codec CPU remain outside this instrumentation.
+
+## Experiment 1: command tokens over SSH and a persistent Python REPL
+
+Six scripted tasks each pose four successive questions on one isolated Linux target. Each pair uses identical input files, Python setup, query expressions, answer format and tokenizer. The direct SSH path keeps its authenticated connection and launches a fresh Python process for each question. It uses whichever of repeating the setup or saving a reusable helper and importing it yields fewer submitted tokens over all four questions. This gives SSH the benefit of hindsight. The ∅ne path submits setup with the first question and retains one interpreter. Process IDs and SSH connection tuples were checked. All 48 answers matched their expected values.
+
+| Four-question task | Direct SSH tokens | Persistent REPL tokens | Tokens saved | Reduction |
+| --- | ---: | ---: | ---: | ---: |
+| CSV join | 255 | 215 | 40 | 15.7% |
+| HTTP log | 109 | 80 | 29 | 26.6% |
+| Dependencies | 150 | 109 | 41 | 27.3% |
+| Configuration | 101 | 69 | 32 | 31.7% |
+| File inventory | 100 | 71 | 29 | 29.0% |
+| Independent commands | 35 | 35 | 0 | 0.0% |
+| **All six tasks** | **750** | **579** | **171** | **22.8%** |
+
+The five tasks that shared setup used the saved-helper strategy over SSH. They covered joining two CSV tables, filtering HTTP logs, traversing a dependency graph, reading configuration and inspecting files. The four independent commands needed no setup and had identical token counts. The total is weighted by submitted tokens. The fixed commands measure the cost of these implementations; the percentage is not a population estimate or a provider billing measurement. Both paths exclude transport wrappers and verification probes. The earlier four-query pilot used a different import and answer format and is reported separately below.
+
+![Cumulative submitted Python tokens by task and question](experiments/results/experiment-one.svg)
+
+[Runner and reproduction](experiments/README.md#experiment-1-command-tokens) · [Per-turn code and measurements](experiments/results/experiment-one.json)
+
+## Repeated queries against a remote join
+
+**What persistence bought.** Holding the ∅ne worker, SSH path and query code fixed isolates the lifetime of the joined object. On the 128 MiB fixture, both arms read the same source on query 1. Keeping the object saved one full scan on each of the next seven queries: **896 MiB fewer logical source reads (87.5%)** for **12.79 MiB more target RSS after query 8** relative to resetting the interpreter. At 8 MiB the corresponding differences were 56.01 MiB of reads and 1.05 MiB of RSS. This is the effect measured when the workload actually reuses the object.
+
+A fact table and a dimension table reside on one isolated Linux SSH target. The eight successive questions require cleaning and joining the same rows, then computing totals, filtered group counts, maxima and regional winners. The fixed-code experiment varied the fact table size (8 or 128 MiB) and the lifetime of the joined rows. The disk and memory policies reused the same packed 32-bit representation. The reset control kept the ∅ne transport and replaced its Python interpreter between queries. Every one of the 64 answers matched the independent fixture key. [Method and commands](experiments/README.md#joined-table-follow-ups-over-ssh)
+
+| 128 MiB source, eight queries | Source read (MiB) | Joined cache written / read (MiB) | Target RSS idle / peak / after (MiB) |
+| --- | ---: | ---: | ---: |
+| SSH, reparse each time | 1,024.01 | 0 / 0 | 13.17 / 36.02 / 13.49 |
+| SSH, disk cache | 128.00 | 12.91 / 90.40 | 13.46 / 36.28 / 13.78 |
+| ∅ne, retain joined rows | 128.00 | 0 / 0 | 40.41 / 55.69 / 55.69 |
+| ∅ne, reset each time | 1,024.01 | 0 / 0 | 40.22 / 55.82 / 42.90 |
+
+The first follow-up already saves one full input scan relative to reparsing. Against the disk cache, keeping the live object avoids 103.31 MiB of intermediate writes and reads over eight queries and uses 41.91 MiB more target RSS after the last answer. Of that difference, 26.95 MiB was present before loading the data. At 8 MiB the same comparison avoids 6.46 MiB of intermediate I/O and retains 30.20 MiB more target RSS. These are logical application bytes for a full-detail sequential cache. An indexed store or a cache of task-specific aggregates can produce a different tradeoff. Each fixed policy ran once per size; memory is sampled process-summed RSS. [Fixed-run curves](experiments/results/reuse-fixed.svg)
+
+### Submitted Python tokens with the SSH connection held open
+
+Four successive queries used the same 8 MiB fixture, Python setup and query expressions. Both direct SSH arms reused the authenticated OpenSSH connection and launched a fresh Python process for each request. The saved-helper arm submitted the module contents on its first call and imported the module on every call. The persistent arm defined the same objects once. A reset control replaced its interpreter before each follow-up. The probe verified the SSH connection tuple on each direct path and checked the interpreter PID pattern in every arm. All 16 answers passed.
+
+| Cumulative Python tokens | Query 1 | Query 2 | Query 3 | Query 4 |
+| --- | ---: | ---: | ---: | ---: |
+| SSH, inline setup | 147 | 296 | 465 | 618 |
+| SSH, save and import helper | 180 | 209 | 258 | 291 |
+| Persistent Python REPL | 147 | 167 | 207 | 231 |
+| REPL reset between queries | 147 | 296 | 465 | 618 |
+
+Relative to SSH with the saved helper, the persistent arm saved 60 submitted tokens across four queries. Of these, 33 came from the first-call file-writing and import code, and nine from each subsequent import. Relative to inline SSH it saved 387 tokens by omitting setup on three follow-ups. Resetting the REPL reproduced the inline SSH count on every query. These are deterministic o200k_base counts of submitted Python for the stated implementations. SSH wrappers, measurement probes and provider prompts are outside the count. A preinstalled helper or shorter imports would change the comparison. [Cumulative curve](experiments/results/reuse-command-tokens.svg)
+
+### Reuse strategies selected by the model
+
+With the 128 MiB source, three pairs of eight-turn runs used `gpt-6.2-sol` at low reasoning. The authenticated Codex CLI proposed Bash or Python actions over the same controller interface. Both paths could batch operations, save a reusable program or cache results on the target. The prompt described the two source tables on each turn and disclosed the current question only. All 48 checkpoint answers passed and each trajectory preserved the input hashes. [Model token curves](experiments/results/reuse-live.svg)
+
+| Per eight-turn trajectory | Direct SSH | ∅ne over SSH |
+| --- | ---: | ---: |
+| Submitted command tokens, pairs 1 / 2 / 3 | 1,763 / 1,717 / 1,803 | 1,239 / 1,859 / 1,666 |
+| Mean submitted command tokens | 1,761 | 1,588 |
+| Mean provider output tokens | 2,306 | 2,083 |
+| Mean provider input tokens, including cached | 152,380 | 152,180 |
+| Mean cached input tokens | 49,451 | 71,381 |
+
+Mean submitted command tokens fell 9.8% and provider output fell 9.7%. Two pairs favored ∅ne for command tokens; in pair 2 its commands used 142 more. The common controller instructions and accumulated history dominated provider input, which differed by 0.13%. Cache hits varied between model calls. With three paired trajectories these are observed differences for this workload.
+
+An instrumented replay of the recorded model actions reproduced all 48 answers and exit outcomes. Direct SSH opened the fact table on 24 of 24 actions and the dimension table on 24. ∅ne opened them on 23 and 18 actions respectively. One ∅ne trajectory reused a previous aggregate to answer the last question; the other two reopened both source files on every turn. After the last answer target RSS ranged from 13.64 to 13.80 MiB on SSH and 44.17 to 44.72 MiB on ∅ne. These live-interface replays opened Bash and Python for ∅ne, while the fixed replay opened Python only. The file-open counts measure access frequency. Only the fixed replay instruments logical data bytes. [Model-action replay curves](experiments/results/reuse-trace.svg)
+
+Pairing token differences with the file-open trace clarifies the model result. In pair 1, ∅ne used 524 fewer command tokens and opened the fact table on seven actions versus eight. In pairs 2 and 3 both paths opened both inputs on every action. ∅ne used 142 more command tokens in pair 2 and 137 fewer in pair 3. The aggregate command-token saving is therefore descriptive; the data do not identify avoided fact-table scans as its cause. Persistent state eliminated repeated source reads in the controlled implementation, while this model usually chose to reopen the source.
+
+## Model-generated PowerShell wrappers
+
+Five Bash fixtures cover an ordinary command, multiline control flow, quotes, dollar expressions and a 1,177-byte script containing nested JSON. The task was to transport the exact source, including its final newline. Every live submission passed on its first attempt on all three paths: the decoded source, exit status, stdout and target artifact matched. Each cell used one independent low-reasoning `gpt-6.2-sol` request. The controller mapped the target alias to the isolated fixture. [Method and commands](experiments/README.md#powershell-wrapper-supplement)
+
+| Across five tasks | ∅ne MCP over SSH | PowerShell → SSH | PowerShell → Docker |
+| --- | ---: | ---: | ---: |
+| Submitted command + stdin tokens | 449 | 484 | 489 |
+| Provider output tokens | 725 | 776 | 826 |
+| Provider input tokens, including cached | 88,318 | 88,497 | 88,509 |
+| Verified on first attempt | 5/5 | 5/5 | 5/5 |
+
+The model used stdin on all ten PowerShell submissions. In this interface that cost seven extra submitted tokens per SSH call and eight per Docker call, independent of script length. With a fixed inline command, the quote-heavy fixture instead took 67 tokens through PowerShell and SSH, 41 through PowerShell and Docker, and 28 through ∅ne. These figures isolate command text. At the shared SSH relay, the 1,177-byte fixture moved 2,792 bytes over direct SSH and 3,832 bytes over ∅ne during the live calls. The token saving and the transport framing cost can coexist. [Model-chosen command curves](experiments/results/wrapper-model.svg) · [Fixed inline curves](experiments/results/wrapper-replay.svg)
+
+A second set of 15 model calls added the option to write and run `job.sh` on the target. All 15 passed on their first attempt. The model again chose direct code on ∅ne and stdin on both PowerShell paths. Total submitted tokens were unchanged at 449, 484 and 489 respectively. Provider output in this free-choice condition was 765, 776 and 804. The separate file-only reference verified the exact saved script on all 15 tasks. When a saved script was required, the fixed commands used 544, 509 and 539 tokens respectively. The ∅ne file reference included a Bash heredoc to write the file; direct SSH streamed its contents into the remote command. [Free-choice curves](experiments/results/wrapper-free-model.svg) · [File-only controls](experiments/results/wrapper-file-replay.json)
+
+The inline replays measured the actual Docker ExecCreate HTTP body on the local daemon socket. For the 1,177-byte script it was **1,609 bytes**, including **1,453 bytes** for the encoded `Cmd` array. Sending that script over stdin reduced the body to **169 bytes**, including a **13-byte** `Cmd` array; all 1,177 script bytes traveled separately on stdin. The 28-byte ordinary script also produced a 169-byte body over stdin. This isolates the three operations in the inline example: PowerShell parses its literals, Docker encodes its argument vector as JSON, and Bash parses the decoded script. Using stdin removes the script contents from the argument vector. [Inline replay data](experiments/results/wrapper-replay.json) · [Matched stdin captures](experiments/results/wrapper-replay-stdin.json)
+
+## Command serialization and launch on Linux
+
+On November 24, 2026, the same Bash script ran through PowerShell 7.6.6 and Docker 29.9.2, and through the current ∅ne 0.2.0 worker with a persistent Bash session. Both targets used Bash 5.3.9 from the same pinned Alpine-based image. The test ran on one Fedora 44 x86-64 host with a Ryzen 7 5800H and Go 1.27.4. The worker used its real request protocol on a private Unix socket. This isolates the worker path from SSH, MCP, and model inference. [Reproduce the experiment](experiments/README.md#serialization-and-command-launch)
+
+The first Bash statement records when the script begins. Launch time runs from the client's dispatch to that timestamp. Completion includes receiving the final result. Each row contains 30 latency trials and five separate memory trials. The peak is the largest sampled combined RSS of the launcher tree and target processes across those five trials. The sampler runs every 2 ms. Shared Docker services and the benchmark driver are outside the memory boundary.
+
+| Script bytes | Execution path | Launch median | Launch p95 | Completion median | Peak sampled RSS |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 49 | Fresh PowerShell → Docker exec → Bash | 171.77 ms | 177.22 ms | 218.54 ms | 131.8 MiB |
+| 49 | Warm PowerShell → Docker exec → Bash | 50.12 ms | 51.33 ms | 53.30 ms | 151.9 MiB |
+| 49 | ∅ne worker → warm Bash | 1.13 ms | 1.25 ms | 1.43 ms | 12.4 MiB |
+| 1,073 | Fresh PowerShell → Docker exec → Bash | 171.30 ms | 179.46 ms | 217.80 ms | 131.8 MiB |
+| 1,073 | Warm PowerShell → Docker exec → Bash | 50.00 ms | 52.65 ms | 53.20 ms | 152.4 MiB |
+| 1,073 | ∅ne worker → warm Bash | 2.28 ms | 2.47 ms | 2.80 ms | 13.0 MiB |
+| 16,433 | Fresh PowerShell → Docker exec → Bash | 176.33 ms | 183.88 ms | 224.01 ms | 133.0 MiB |
+| 16,433 | Warm PowerShell → Docker exec → Bash | 50.87 ms | 52.89 ms | 54.57 ms | 154.4 MiB |
+| 16,433 | ∅ne worker → warm Bash | 18.66 ms | 19.95 ms | 19.30 ms | 16.1 MiB |
+
+The codec microbenchmarks separately time PowerShell quote construction and parsing, the Docker Exec Create JSON body, and ∅ne's actual JSON request frame. Values are microseconds per operation. Bash syntax checking is amortized over 512 commands from a local file. The PowerShell parsing measurement excludes native process creation. The JSON measurements use in-memory I/O and exclude the Docker daemon's HTTP and container runtime work. [Docker Exec Create request schema](https://github.com/moby/moby/blob/docker-v29.9.2/api/types/container/exec_create_request.go)
+
+| Script bytes | PowerShell quote / parse (µs) | Docker JSON encode / decode (µs) | ∅ne frame encode / decode (µs) | Bash parse (µs) |
+| ---: | ---: | ---: | ---: | ---: |
+| 49 | 0.17 / 18.43 | 0.83 / 2.59 | 0.72 / 1.79 | 3.91 |
+| 1,073 | 0.64 / 27.55 | 2.66 / 6.14 | 3.15 / 7.79 | 31.25 |
+| 16,433 | 6.19 / 211.67 | 27.82 / 53.02 | 30.39 / 85.77 | 361.33 |
+
+For the 1,073-byte script, Docker's JSON body was 1,244 bytes and ∅ne's request frame was 1,185 bytes. Both paths encode a request and Bash still parses the script on each invocation. The codec measurements are much smaller than the observed launch delays. Process startup, communication, and target dispatch are also part of launch. ∅ne's median launch rose from 1.13 ms to 18.66 ms across the tested sizes. This run did not attribute that growth to individual stages of the live worker path.
+
 ## Per-target deployment footprint
 
-A second pilot used an x86-64 Alpine 3.23 root filesystem with BusyBox, Python 3, and OpenSSH Server. The compilation profile also installed GCC and musl development headers. For each profile, both deployments used the same base and task dependencies. The complete Codex 0.170.0 musl distribution was the published standalone bundle. The worker was the pre-rename `ssh-mcp` 0.2.0 executable, built with `CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w'`. Sizes below sum regular file contents in the exported base rootfs and the unpacked deployment payload. They exclude container-layer overhead, task outputs, and session logs. [11]
+The deployment pilot used an x86-64 Alpine 3.23 root filesystem with BusyBox, Python 3, and OpenSSH Server. The compilation profile also installed GCC and musl development headers. For each profile, both deployments used the same base and task dependencies. The complete Codex 0.170.0 musl distribution was the published standalone bundle. The worker was the pre-rename `ssh-mcp` 0.2.0 executable, built with `CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w'`. Sizes below sum regular file contents in the exported base rootfs and the unpacked deployment payload. They exclude container-layer overhead, task outputs, and session logs. [11]
 
 | Footprint | Base only | Target with standalone Codex | Target with ∅ne |
 | --- | ---: | ---: | ---: |
@@ -165,9 +364,9 @@ Process PSS comes from `/proc/<pid>/smaps_rollup`. The musl entries sum proporti
 
 ## Conclusion
 
-The pilots support two claims. Keeping a Python interpreter alive improves execution time when consecutive steps reuse parsed data. The Bash REPL retained its shell state, and its CSV timings stayed close to exec once because each step still launched a fresh Python interpreter. Keeping the full CLI on the controller also reduces the software and memory placed on each target. The disk comparison holds the workload dependencies fixed, so the C toolchain's size remains visible in both totals.
+Keeping a Python interpreter alive improves execution time when consecutive steps reuse parsed data. The Bash REPL retained its shell state, and its CSV timings stayed close to exec once because each step still launched a fresh Python interpreter. Returning compact tool results reduced context growth in diagnostic-heavy replay. The small model pilot used compact results in both arms and found nearly identical provider token use. Keeping the full CLI on the controller also reduces the software and memory placed on each target.
 
-The memory comparison is a snapshot of selected target processes with a mock model endpoint and matched Python data. The task checks test execution capability with scripted inputs. Establishing end-to-end task success and performance would require running Codex against a real model on external SSH hosts under equivalent budgets.
+The memory comparison is a snapshot of selected target processes with a mock model endpoint and matched Python data. The two-target agent pilot found faster target actions with ∅ne and nearly identical model input. A larger study on external SSH hosts would be needed to estimate effects on task success and end-to-end performance.
 
 ## Future work
 

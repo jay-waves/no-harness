@@ -74,9 +74,12 @@ The direct baseline can still reuse SSH connections and running containers, batc
 # Direct commands start new processes
 
 <!-- diagram: direct-execution.d2 -->
-<!-- alt: The user starts the local agent, which uses SSH, docker exec, and wsl --exec. Python commands on the SSH host, Node.js commands in Docker, and shell commands in WSL each start a fresh process. -->
+<!-- alt: The user starts the local agent, which invokes SSH, docker exec, and wsl --exec through a PowerShell launcher. Python commands on the SSH host, Node.js commands in Docker, and shell commands in WSL each start a fresh process. -->
 
-<p class="caption">Each command starts a fresh process. Later commands reload data they need again.</p>
+<p class="caption">In PowerShell, docker exec nlp bash -c 'node --version && hostname' crosses three encoding and decoding layers. PowerShell unwraps the quoted script, Docker sends it in its JSON argument list, and Bash interprets && in the container.</p>
+
+Notes:
+PowerShell passes the single-quoted script as one argument. The Docker CLI serializes the argument list in the Exec API request, and the Docker Engine decodes it. Bash reads the argument after -c as shell source and runs hostname only if node --version succeeds. See the PowerShell quoting rules (https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules) and the Docker exec reference (https://docs.docker.com/reference/cli/docker/container/exec/).
 
 ---
 
@@ -128,6 +131,25 @@ The per-user worker owns the interpreter processes and listens on a private Unix
 
 Notes:
 The CSV pilot ran on one Linux host over loopback SSH. It used fixed commands without model inference. The Docker and Alpine setup was used for deployment size and PSS measurements. Harness Resource Bench informed the fixed-action approach. The planned end-to-end agent benchmark compares direct commands, remote full agents, and persistent remote REPLs on tasks with verifiable outcomes.
+
+---
+
+# Command launch and serialization on Linux
+
+Same 1,073-byte script and Bash version. Start is the first statement in the target shell.
+
+| Execution path | Median launch | P95 launch | Peak sampled RSS |
+| --- | ---: | ---: | ---: |
+| Fresh PowerShell + Docker exec | 171.30 ms | 179.46 ms | 131.8 MiB |
+| Warm PowerShell + Docker exec | 50.00 ms | 52.65 ms | 152.4 MiB |
+| Warm ∅ne worker + Bash | 2.28 ms | 2.47 ms | 13.0 MiB |
+
+Isolated encode and decode took **8.8 µs** for Docker's JSON request and **10.9 µs** for ∅ne's request frame.
+
+<p class="caption">30 latency trials and 5 memory trials per path. ∅ne uses a local worker socket.</p>
+
+Notes:
+PowerShell 7.6.6, Docker 29.9.2, Bash 5.3.9, one Fedora host. A warm PowerShell still launches Docker CLI and Bash for each call. ∅ne connects directly to its already-running worker, with no SSH or MCP overhead in this pilot. The memory peak is sampled at 2 ms and excludes shared Docker services. The separate PowerShell quote and parse measurements and Bash syntax checks are in REPORT.md. Codec microbenchmarks exclude live socket I/O. At 16,433 bytes, ∅ne's median launch rises to 18.66 ms.
 
 ---
 
@@ -185,31 +207,38 @@ Hold the model, tasks, tool capabilities, token budgets, and time budgets fixed.
 
 ---
 
-# Measure execution, context, and setup costs
+# What changes cumulative input tokens?
 
-| Goal | Measurements |
-| --- | --- |
-| Lower overhead | Installation size, target memory, startup and warm-call latency, task duration, transferred bytes |
-| Less context use | Command and tool-output tokens, cumulative model input tokens, agent turns |
-| Comparable quality | Assertions and final environment state under fixed budgets |
-| Easier configuration | Setup time, manual steps, configuration changes |
+| Replay conditions | Stage 1 | Stage 2 | Stage 3 |
+| --- | ---: | ---: | ---: |
+| Fresh Python, full output | 484 | 1,777 | 3,873 |
+| Persistent Python, full output | 484 | 1,755 | 3,783 |
+| Fresh Python, bounded output | 288 | 992 | 2,103 |
+| Persistent Python, bounded output | 288 | 970 | 2,013 |
+
+Bounded output saved **1,769 replay input tokens** on average. Persistence saved **90** by avoiding repeated setup code.
+
+<p class="caption">Mean cumulative o200k_base input across 24 matched fixtures. All 96 fixed-code runs passed verification.</p>
 
 Notes:
-Include proxy-required targets and targets without model API access. These are planned measurements.
+The full-output policy includes diagnostic records. Bounded output retains the answer line. Inventory and repair were zero-effect controls for persistence. Analysis saved 140 tokens and reconciliation saved 220 on average. The replay assumes two model requests per stage and retains history. Provider usage is measured separately.
 
 ---
 
-# Isolate the effect of persistent state
+# Published tasks and provider token use
 
-- Use fixed-code benchmarks to separate startup and data loading costs from model latency.
-- Disable persistence while retaining Code Mode to separate state reuse from batching.
-- Vary follow-up count and dataset size to measure context growth.
-- Review stale state, disconnects, timeouts, and resets.
+| Model-chosen actions on DataBench | Fresh Python | Persistent ∅ne |
+| --- | ---: | ---: |
+| Correct answers across Forbes and Titanic | 6/6 | 6/6 |
+| Provider input tokens, including cached | 106,439 | 106,496 |
+| Visible tool result tokens | 138 | 138 |
 
-<p class="takeaway">Compare success rates in pairs, cluster confidence intervals by task, and fix a five-percentage-point non-inferiority margin in advance.</p>
+Both paths returned compact results and used nearly the same provider input. Two HumanEval tasks also passed all replay checks with identical replay token counts across conditions.
+
+<p class="caption">The DataBench model pilot covers two tables. A larger paired study is needed to estimate the difference in success rates.</p>
 
 Notes:
-An inconclusive comparison leaves comparable quality unestablished.
+Codex CLI 0.169.1, gpt-6.2-sol with low reasoning, 12 requests total. One Python action per question. Each question was revealed after the preceding action was run. Counts of cached tokens varied by request. HumanEval uses two published problems and their official tests against saved solution.py. The public subsets are adapted to staged tasks. For the larger comparison, cluster confidence intervals by task and set the non-inferiority margin at five percentage points before collecting data.
 
 ---
 
