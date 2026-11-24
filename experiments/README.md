@@ -79,6 +79,15 @@ The RSS sampler covers both target containers' processes plus separate controlle
 
 With the SSH fixture image described above, run `uv run --with tiktoken==0.12.0 --with matplotlib==3.10.8 python experiments/command_token_suite.py`. The runner checks four answers on each of six tasks per path, counts submitted Python using `o200k_base`, and writes `results/experiment-one.json` plus SVG and PNG cumulative curves. Each task starts with fresh workspaces. The JSON records each submitted command, its token count, answer, process ID and SSH connection probe.
 
+The extended experiment uses three original evolving specifications with eight checkpoints each and two paired model runs per task. The grader invokes the current `solve(data)` implementation on the withheld case for the new requirement and on all earlier cases. SSH imports the solution in a fresh interpreter over its reused connection. ∅ne resolves the function in the retained Python namespace. Both arms can save or edit files.
+
+```sh
+uv run --with tiktoken==0.12.0 python experiments/evolution_bench.py
+uv run --locked --script experiments/task_curves.py experiments/results/evolution.json experiments/results/evolution.svg
+```
+
+The runner records every submitted command including retries, provider usage, and strict checkpoint outcomes. The verifier is outside the token budget. The protocol draws on [SlopCodeBench](https://arxiv.org/abs/2603.24755).
+
 ## Joined-table follow-ups over SSH
 
 Build the target image using the two-target setup above. The Python fixture writes a synthetic fact table and a small dimension table into the same target workspace. The eight questions progressively ask for joined counts, sums, filtered groups, maxima and regional winners.

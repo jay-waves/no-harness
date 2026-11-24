@@ -6,7 +6,7 @@ Yu, Jiawei · 3036809907
 
 ## Abstract
 
-This project keeps the Codex CLI on a controller and moves execution to persistent Bash and Python sessions on remote targets. The pilots measured execution and command-launch latency, serialization, deployment size, and memory. In the three-turn CSV task, a persistent Python session parsed the input once and reduced total execution time from 113.98 ms to 61.02 ms, including session initialization. On Alpine, the worker added 9.17 MiB per target, compared with 478.09 MiB for the official standalone Codex bundle. At the sampled headless checkpoint, the worker-side processes used 22,733 KiB PSS, compared with 156,328 KiB for the Codex CLI and a matched Python workload on the target. Scripted checks covered file I/O, C compilation, CSV analysis, and SSH configuration.
+This project keeps the Codex CLI on a controller and moves execution to persistent Bash and Python sessions on remote targets. The pilots measured execution and command-launch latency, serialization, deployment size, and memory. Across 96 strict checkpoints with evolving Python requirements, both paths passed every check, and the persistent REPL used 4.0% fewer submitted command tokens than multiplexed SSH with fresh interpreters. On Alpine, the worker added 9.17 MiB per target, compared with 478.09 MiB for the official standalone Codex bundle. At the sampled headless checkpoint, the worker-side processes used 22,733 KiB PSS, compared with 156,328 KiB for the Codex CLI and a matched Python workload on the target. Scripted checks covered file I/O, C compilation, CSV analysis, and SSH configuration.
 
 ## Project inspiration
 
@@ -83,13 +83,11 @@ Compare the three execution modes on one Linux SSH target. Following Harness Res
 | --- | --- | --- |
 | File check | Return a small fixture's byte length. | Baseline for a task with no prior state. |
 | Workspace sequence | Select a fixture subdirectory and define a text filter, then apply it to two files by relative name in separate turns. Use equivalent shell and Python operations. Exec once repeats setup on each later turn. | Reuse of directory and helper definitions. |
-| CSV follow-ups | Parse the same fixed 100,000-row integer CSV to report row count, then compute the sum and count above a fixed threshold in separate turns. Use the same Python standard-library calculation in all modes. Both fresh-interpreter modes reopen and parse the file each turn. The Python REPL reuses its parsed list. | Reuse of parsed objects and its memory cost. |
 
-Generate the fixture once from a fixed seed and publish its generation parameters, hash, and expected answers. Keep the target account, runtime versions, working tree, fixtures, and output budget fixed. Start a fresh session or trial workspace for each workflow. Prime the filesystem cache with one untimed pass per mode and leave it enabled. Keep the worker running and the SSH transport warm for timed turns. Record connection and session setup separately, including any version handshake, and include them in a second start-to-finish total. A separate CSV sensitivity check can materialize the parsed list to a temporary file for the fresh-interpreter modes and include its write time, read time, and disk footprint.
+Generate the fixture once from a fixed seed and publish its generation parameters, hash, and expected answers. Keep the target account, runtime versions, working tree, fixtures, and output budget fixed. Start a fresh session or trial workspace for each workflow. Prime the filesystem cache with one untimed pass per mode and leave it enabled. Keep the worker running and the SSH transport warm for timed turns. Record connection and session setup separately, including any version handshake, and include them in a second start-to-finish total.
 
-Run each workflow five times per mode, interleaving modes in a fixed-seed order for 45 measured trials. Time each turn from submission to complete result with a monotonic client clock. Report median and range by workflow, total time including setup, verified successes out of five, and CSV parse counts. Apply the same per-turn timeout, record wrong answers, timeouts, disconnects, and truncation explicitly, and report latency for completed trials alongside their success count. Measure target-side idle and post-turn memory for the relevant processes, including the worker, interpreter, and retained data. Record transient process memory separately if sampled. Record worker binary size and additional session or cache bytes separately from preinstalled SSH, Bash, Python, and fixture data.
+Run each workflow five times per mode, interleaving modes in a fixed-seed order for 30 measured trials. Time each turn from submission to complete result with a monotonic client clock. Report median and range by workflow, total time including setup, verified successes out of five,. Apply the same per-turn timeout, record wrong answers, timeouts, disconnects, and truncation explicitly, and report latency for completed trials alongside their success count. Measure target-side idle and post-turn memory for the relevant processes, including the worker, interpreter, and retained data. Record transient process memory separately if sampled. Record worker binary size and additional session or cache bytes separately from preinstalled SSH, Bash, Python, and fixture data.
 
-An optional Codex demo can replay the same CSV follow-ups with a pinned model and tool configuration, one trial per mode. Its transcript can show the number of tool calls and whether the agent reuses state. That demo and testing on external SSH hosts are pending.
 
 ## Loopback SSH pilot
 
@@ -97,18 +95,15 @@ The [experiment runner](experiments/README.md) documents the loopback, deploymen
 
 On November 21, 2026, a scripted pilot ran on a single Linux machine with an authenticated loopback SSH fixture, Go 1.27.4, Python 3.14.3, and the pre-rename `ssh-mcp` 0.2.0 executable. Exec once used one authenticated Go SSH client with a new execution channel per command. Both REPLs used the Go MCP SDK over stdio to call the same ∅ne tools a client would use. The fixture kept its worker and SSH transports warm and recreated the REPL sessions once per repetition. The pilot interleaved modes in a fixed order with one untimed warm-up call per mode and used a three-minute overall deadline. Model inference and an external network round trip were absent.
 
-All 90 timed result-producing calls returned the expected output with exit code zero. The filter setup was timed separately from the two filter applications. Direct SSH prepared an executable filter file, Bash retained a shell function and working directory, and Python retained a callable and working directory. The byte-count and filter tasks used each runtime's native operations, so those rows compare the practical interfaces and their chosen commands.
+The displayed byte-count and filter calls returned the expected output with exit code zero. The filter setup was timed separately from the two filter applications. Direct SSH prepared an executable filter file, Bash retained a shell function and working directory, and Python retained a callable and working directory. The byte-count and filter tasks used each runtime's native operations, so those rows compare the practical interfaces and their chosen commands.
 
 | Workflow | Exec once | Bash REPL | Python REPL |
 | --- | ---: | ---: | ---: |
 | Byte count | 4.20 ms | 3.12 ms | 1.61 ms |
 | Text filter, two applications | 9.22 ms | 5.43 ms | 2.71 ms |
-| CSV, three turns | 113.98 ms | 115.22 ms | 30.38 ms |
-| CSV, three turns plus a new REPL session when needed | 113.98 ms | 117.22 ms | 61.02 ms |
 
 Values are medians of five per-trial totals. Session opens on warm transports took a median of 2.28 ms for Bash and 30.52 ms for Python. Filter preparation took 7.15 ms for exec once, 5.64 ms for Bash, and 4.83 ms for Python. The initial direct SSH connection took 7.27 ms and initial stdio MCP initialization took 5.32 ms in this run. Initial REPL worker connection and startup were excluded as part of warm-up.
 
-The CSV fixture contained one integer per line from 1 to 100,000, with a trailing newline after each integer. Its SHA-256 was `b2bc7d3f8b652d2ec96865b68ad8f80e22cca174abe1aed7889e242a747d590f`. The expected results were a count of 100,000, a sum of 5,000,050,000, and a count of 50,000 above the threshold of 50,000. All modes used the same Python parser, list representation, and calculations. Exec once and Bash parsed three times, while Python parsed once. Python's warm turn medians were 23.93, 2.15, and 4.22 ms. The three-turn total was 73% shorter than exec once on warm transports and 46% shorter when including the Python session open. Target-only memory and session storage growth were unmeasured in this loopback run. The pilot supports an execution-overhead comparison for these fixtures. External-host performance and Codex task outcomes remain open.
 
 ## Task quality and context growth
 
@@ -218,6 +213,21 @@ The five tasks that shared setup used the saved-helper strategy over SSH. They c
 
 [Runner and reproduction](experiments/README.md#experiment-1-command-tokens) · [Per-turn code and measurements](experiments/results/experiment-one.json)
 
+### Extended Experiment 1: evolving Python implementations
+
+The extended comparison follows SlopCodeBench [16] in revealing requirements one checkpoint at a time, asking the agent to extend its own implementation, and rerunning previous tests against the current version. Three original tasks each have eight checkpoints. Two paired runs per task yield 12 trajectories and 96 graded checkpoints. A strict pass requires the withheld case for the new rule and every prior case to pass. The three contracts cover ledger deduplication, reversals and split allocations, layered configuration with recursive references, and telemetry aggregation with late corrections. All tasks use the same `solve(data)` contract.
+
+Both arms used `gpt-6.2-sol` at low reasoning with the same controller and a three-decision budget per checkpoint. Both could persist and edit files. Multiplexed SSH starts a fresh Python process and exposes the solution through an importable module. ∅ne retains the Python namespace and exposes the same callable in that namespace. Model-submitted Python tokens are counted with `o200k_base`, including retries. Provider counts come from the Codex CLI and exclude grader invocations. The suite adapts the assessment procedure using original tasks and one withheld case per checkpoint.
+
+| Task, two trajectories per arm | SSH command tokens | REPL command tokens | REPL change | Strict SSH / REPL |
+| --- | ---: | ---: | ---: | ---: |
+| Ledger | 6,223 | 6,395 | +2.8% | 16/16 · 16/16 |
+| Configuration | 8,345 | 7,800 | −6.5% | 16/16 · 16/16 |
+| Telemetry | 6,977 | 6,483 | −7.1% | 16/16 · 16/16 |
+| **Total** | **21,545** | **20,678** | **−4.0%** | **48/48 · 48/48** |
+
+Both repeats agree on the direction within each task. Each arm completed all six trajectories. Provider input including cached tokens fell from 943,473 to 913,573 (3.2%) and provider output from 26,572 to 25,317 (4.7%). Cached input varied between trajectories. The measured saving is workload-dependent and the two repeats per task support a descriptive comparison. One withheld test per new rule limits behavioral coverage. [Cumulative curves](experiments/results/evolution.svg) · [Per-checkpoint data](experiments/results/evolution.json) · [Reproduction](experiments/README.md#experiment-1-command-tokens)
+
 ## Repeated queries against a remote join
 
 **What persistence bought.** Holding the ∅ne worker, SSH path and query code fixed isolates the lifetime of the joined object. On the 128 MiB fixture, both arms read the same source on query 1. Keeping the object saved one full scan on each of the next seven queries: **896 MiB fewer logical source reads (87.5%)** for **12.79 MiB more target RSS after query 8** relative to resetting the interpreter. At 8 MiB the corresponding differences were 56.01 MiB of reads and 1.05 MiB of RSS. This is the effect measured when the workload actually reuses the object.
@@ -282,6 +292,8 @@ A second set of 15 model calls added the option to write and run `job.sh` on the
 The inline replays measured the actual Docker ExecCreate HTTP body on the local daemon socket. For the 1,177-byte script it was **1,609 bytes**, including **1,453 bytes** for the encoded `Cmd` array. Sending that script over stdin reduced the body to **169 bytes**, including a **13-byte** `Cmd` array; all 1,177 script bytes traveled separately on stdin. The 28-byte ordinary script also produced a 169-byte body over stdin. This isolates the three operations in the inline example: PowerShell parses its literals, Docker encodes its argument vector as JSON, and Bash parses the decoded script. Using stdin removes the script contents from the argument vector. [Inline replay data](experiments/results/wrapper-replay.json) · [Matched stdin captures](experiments/results/wrapper-replay-stdin.json)
 
 ## Command serialization and launch on Linux
+
+For the 1,073-byte script, ∅ne’s local worker path cut median launch time by **95.4%** (50.00 to 2.28 ms) and peak sampled RSS by **91.5%** (152.4 to 13.0 MiB) relative to warm PowerShell and Docker exec. These reductions apply to the measured launch paths. The isolated JSON codec timings are reported separately below.
 
 On November 24, 2026, the same Bash script ran through PowerShell 7.6.6 and Docker 29.9.2, and through the current ∅ne 0.2.0 worker with a persistent Bash session. Both targets used Bash 5.3.9 from the same pinned Alpine-based image. The test ran on one Fedora 44 x86-64 host with a Ryzen 7 5800H and Go 1.27.4. The worker used its real request protocol on a private Unix socket. This isolates the worker path from SSH, MCP, and model inference. [Reproduce the experiment](experiments/README.md#serialization-and-command-launch)
 
@@ -399,7 +411,7 @@ The first cluster prototype could dispatch independent jobs to two or three Linu
 
 **∅ne** is a small Go tool for forwarding execution over SSH and keeping Bash and Python processes alive. Its MCP interface returns a version handshake, execution IDs, and bounded output. The target worker keeps sessions available for reconnecting clients. The course project includes the implementation and reproducible pilots. [Implementation and setup](ssh-mcp/README.md) · [Experiment runner](experiments/README.md)
 
-The pilots show two practical benefits. The persistent Python session shortened the three-turn CSV task from **113.98 ms to 61.02 ms**, including session setup. The SSH worker added **9.17 MiB** per target, while deploying the full Codex CLI bundle added **478.09 MiB**.
+Across three evolving Python tasks, the persistent REPL used **4.0% fewer submitted command tokens** than multiplexed SSH with fresh interpreters. Both paths passed all 48 strict checkpoints per arm. The SSH worker added **9.17 MiB** per target, while deploying the full Codex CLI bundle added **478.09 MiB**.
 
 The course proposal took shape before **Codex v0.170.0** was released on November 18, 2026. That release shipped the standalone `codex-exec-server` as **[Experimental]**, providing a native baseline for remote process and file operations. DeepSeek Harness described its SSH helper in **v0.2.1-alpha.2** on October 9, 2026. Its remote programmatic tool calling connects the Code Mode pattern to SSH. The documented setup uses a custom profile and a separately deployed helper. [11–15]
 
@@ -422,3 +434,4 @@ These implementations point to an emerging design direction in agent harnesses: 
 13. DeepSeek. [SSH execution subsystem and lifecycle](https://github.com/deepseek-ai/deepseek-harness/blob/2e39e70496aa02986ca6a820c5d497e816b69d7e/docs/subsystems/ssh.md).
 14. DeepSeek. [DeepSeek Harness 0.2.1-alpha.2 release](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.2).
 15. DeepSeek. [SSH provider setup and limitations](https://github.com/deepseek-ai/deepseek-harness/blob/2e39e70496aa02986ca6a820c5d497e816b69d7e/packages/ssh/ssh/README.md).
+16. Orlanski et al. *SlopCodeBench: Benchmarking How Coding Agents Degrade Over Long-Horizon Iterative Tasks*. 2026. [Paper](https://arxiv.org/abs/2603.24755) · [Benchmark repository](https://github.com/SprocketLab/slop-code-bench)

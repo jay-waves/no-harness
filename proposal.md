@@ -91,6 +91,8 @@ The telemetry follow-up study adds a matched upfront control and a seven-checkpo
 
 Experiment 1 compares submitted Python tokens on multiplexed SSH with fresh interpreters and on a persistent remote Python REPL across six four-question tasks. [Task-level measurements and curves](REPORT.md#experiment-1-command-tokens-over-ssh-and-a-persistent-python-repl)
 
+The extended Experiment 1 adopts SlopCodeBench's progressive specifications and cumulative regression checks [4]. It evaluates evolving ledger, configuration, and telemetry programs over multiplexed SSH and a persistent Python REPL. The same model extends its own implementation at eight checkpoints while the runner records command tokens, provider usage, and strict checkpoint passes.
+
 The repeated-query supplement measures logical source and cache I/O alongside target RSS, using the same joined representation in memory and on disk. A separate PowerShell supplement measures how the choice of inline arguments or stdin changes model-generated command tokens and the actual Docker ExecCreate JSON body. [Repeated queries](REPORT.md#repeated-queries-against-a-remote-join) · [PowerShell wrappers](REPORT.md#model-generated-powershell-wrappers)
 
 Success-rate differences will use paired comparisons with confidence intervals clustered by task. A five-percentage-point non-inferiority margin will be fixed in advance; inconclusive results will not establish equal quality. Failure analysis will cover stale state, disconnects, timeouts, and resets.
@@ -104,3 +106,4 @@ A working prototype, reproducible tasks, and an evaluation showing when persiste
 1. Wang et al. *Executable Code Actions Elicit Better LLM Agents*. ICML 2024. <https://arxiv.org/abs/2402.01030>
 2. Cloudflare. *Code Mode*. <https://developers.cloudflare.com/agents/tools/codemode/>
 3. Hugging Face. *Secure code execution in smolagents*. <https://huggingface.co/docs/smolagents/en/tutorials/secure_code_execution>
+4. Orlanski et al. *SlopCodeBench: Benchmarking How Coding Agents Degrade Over Long-Horizon Iterative Tasks*. 2026. <https://arxiv.org/abs/2603.24755>

@@ -317,6 +317,29 @@ def plot_tasks(summary, kind):
     return fig, (tokens, comparison), notes
 
 
+def plot_evolution(summary):
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4))
+    for mode, label, color, marker in (
+        ("ssh", "Multiplexed SSH", "#345995", "o"),
+        ("one", "Persistent REPL", "#28766F", "^"),
+    ):
+        trails = [trial["stages"] for trial in summary["trials"] if trial["mode"] == mode]
+        cumulative = [list(accumulate(stage["command_tokens"] for stage in stages)) for stages in trails]
+        axes[0].plot(range(1, 9), [mean(group) for group in zip(*cumulative, strict=True)],
+                     color=color, marker=marker, label=label)
+        axes[1].plot(range(1, 9), [sum(stage["success"] for stage in group)
+                                 for group in zip(*trails, strict=True)],
+                     color=color, marker=marker, label=label)
+    for ax, title, ylabel in zip(axes, ("Submitted Python", "Strict passes"),
+                                 ("Cumulative tokens per trajectory (mean)", "Trajectories passing"),
+                                 strict=True):
+        ax.set(title=title, xlabel="Checkpoint", ylabel=ylabel, xticks=range(1, 9))
+        ax.set_ylim(bottom=0)
+        ax.legend()
+    axes[1].yaxis.set_major_locator(MaxNLocator(integer=True))
+    return fig, axes, "Three tasks, two pairs per task. Curves include every recorded attempt."
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("summary", type=Path)
@@ -335,7 +358,9 @@ def main():
         parser.error(f"Unknown summary kind {kind!r}")
     plt.rcParams.update({"svg.fonttype": "none", "axes.spines.top": False, "axes.spines.right": False})
     try:
-        if summary.get("suite") == "interactive":
+        if summary.get("suite") == "evolution":
+            fig, axes, notes = plot_evolution(summary)
+        elif summary.get("suite") == "interactive":
             fig, axes, notes = plot_interactive(summary)
         else:
             fig, axes, notes = plot_tasks(summary, kind)

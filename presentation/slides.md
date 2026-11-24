@@ -115,7 +115,7 @@ The per-user worker owns the interpreter processes and listens on a private Unix
 
 ---
 
-# Experiment 1 · 22.8% fewer Python tokens with a REPL
+# Experiment 1 · Controlled command-token baseline
 
 <!-- chart: command-tokens -->
 
@@ -123,6 +123,24 @@ The per-user worker owns the interpreter processes and listens on a private Unix
 
 Notes:
 Direct SSH reused the authenticated connection and started fresh Python for every question. Each SSH task used the cheaper of repeating its setup or saving and importing a helper. The persistent Python REPL submitted setup once. Both arms used identical expressions and answer formats. Token counts cover submitted Python only, measured with o200k_base. Connection tuples and interpreter PIDs were verified. The graph sums the cumulative counts across all six tasks after each question. Source: experiments/command_token_suite.py and REPORT.md, Experiment 1.
+
+---
+
+# Experiment 1 · 4.0% fewer command tokens
+
+Three tasks, eight checkpoints each, two paired runs per task. The model extended its previous Python implementation as new requirements appeared.
+
+| Task | SSH command tokens | REPL command tokens |
+| --- | ---: | ---: |
+| Ledger reversals and splits | 6,223 | 6,395 |
+| Layered configuration | 8,345 | 7,800 |
+| Telemetry corrections | 6,977 | 6,483 |
+| **Total** | **21,545** | **20,678** |
+
+<p class="caption">Each path passed 48/48 strict checkpoints, including regression tests. Protocol adapted from SlopCodeBench.</p>
+
+Notes:
+Same low-reasoning gpt-6.2-sol on both paths. SSH kept its connection and started fresh Python. ∅ne kept the Python interpreter. Both could save files. Command totals include retries. Provider input including cached tokens fell 3.2%, and output fell 4.7%. Both replicates agreed on the direction within each task. Source: REPORT.md, Extended Experiment 1.
 
 ---
 
@@ -143,41 +161,20 @@ The top table comes from fixed replays capturing the actual HTTP body at the loc
 
 ---
 
-# Experimental setup and CSV pilot
-
-**Environment.** Docker containers with Alpine Linux (musl libc) for disk and memory tests. A shared, minimal base reduces variation from system packages.
-
-**Benchmark.** A scripted CSV microbenchmark over warm loopback SSH compares three execution modes. End-to-end agent tasks are a separate planned benchmark.
-
-| Execution mode | CSV parses | Three-turn median |
-| --- | ---: | ---: |
-| Exec once | 3 | 113.98 ms |
-| Bash REPL | 3 | 117.22 ms |
-| Python REPL | 1 | 61.02 ms |
-
-<p class="caption">Five trials per mode. Same parser and calculations. Times include REPL startup where applicable.</p>
-
-Notes:
-The CSV pilot ran on one Linux host over loopback SSH. It used fixed commands without model inference. The Docker and Alpine setup was used for deployment size and PSS measurements. Harness Resource Bench informed the fixed-action approach. The planned end-to-end agent benchmark compares direct commands, remote full agents, and persistent remote REPLs on tasks with verifiable outcomes.
-
----
-
 # Command launch and serialization on Linux
 
-Same 1,073-byte script and Bash version. Start is the first statement in the target shell.
+**∅ne cut median launch time by 95.4% and peak sampled RSS by 91.5%** compared with warm PowerShell and Docker exec in this Linux pilot.
 
-| Execution path | Median launch | P95 launch | Peak sampled RSS |
+| Execution path | Launch median ↓ | Launch p95 ↓ | Peak RSS ↓ |
 | --- | ---: | ---: | ---: |
 | Fresh PowerShell + Docker exec | 171.30 ms | 179.46 ms | 131.8 MiB |
 | Warm PowerShell + Docker exec | 50.00 ms | 52.65 ms | 152.4 MiB |
 | Warm ∅ne worker + Bash | 2.28 ms | 2.47 ms | 13.0 MiB |
 
-Isolated encode and decode took **8.8 µs** for Docker's JSON request and **10.9 µs** for ∅ne's request frame.
-
-<p class="caption">30 latency trials and 5 memory trials per path. ∅ne uses a local worker socket.</p>
+<p class="caption">Same 1,073-byte Bash script. Launch ends at the first target statement. ∅ne uses a local worker socket. 30 latency and 5 memory trials per path.</p>
 
 Notes:
-PowerShell 7.6.6, Docker 29.9.2, Bash 5.3.9, one Fedora host. A warm PowerShell still launches Docker CLI and Bash for each call. ∅ne connects directly to its already-running worker, with no SSH or MCP overhead in this pilot. The memory peak is sampled at 2 ms and excludes shared Docker services. The separate PowerShell quote and parse measurements and Bash syntax checks are in REPORT.md. Codec microbenchmarks exclude live socket I/O. At 16,433 bytes, ∅ne's median launch rises to 18.66 ms.
+PowerShell 7.6.6, Docker 29.9.2, Bash 5.3.9, one Fedora host. A warm PowerShell still launches Docker CLI and Bash for each call. ∅ne connects directly to its already-running worker, with no SSH or MCP overhead in this pilot. The memory peak is sampled at 2 ms and excludes shared Docker services. The separate PowerShell quote and parse measurements and Bash syntax checks are in REPORT.md. Isolated encode and decode took 8.8 µs for Docker’s JSON request and 10.9 µs for ∅ne’s frame. Codec microbenchmarks exclude live socket I/O. The headline measures the complete launch path. At 16,433 bytes, ∅ne's median launch rises to 18.66 ms.
 
 ---
 
@@ -278,7 +275,7 @@ Codex CLI 0.169.1, gpt-6.2-sol with low reasoning, 12 requests total. One Python
 
 **∅ne** keeps Bash and Python sessions alive across SSH reconnects. The command is `one`.
 
-Three-turn CSV task **113.98 → 61.02 ms**. Worker deployment **9.17 MiB per target**, versus **478.09 MiB** for the full Codex CLI bundle.
+Evolving Python tasks used **4.0% fewer command tokens** with a persistent REPL. Worker deployment **9.17 MiB per target**, versus **478.09 MiB** for the full Codex CLI bundle.
 
 | Related work | Public release |
 | --- | --- |
@@ -288,7 +285,7 @@ Three-turn CSV task **113.98 → 61.02 ms**. Worker deployment **9.17 MiB per ta
 <p class="caption">Lightweight remote execution is an emerging design direction. Broad adoption has yet to be established.</p>
 
 Notes:
-The CSV pilot used warm loopback SSH. The deployment figures compare the worker with the full Codex CLI bundle. The proposal milestone refers to when the course idea took shape.
+The deployment figures compare the worker with the full Codex CLI bundle. The proposal milestone refers to when the course idea took shape.
 
 ---
 
@@ -301,3 +298,4 @@ The CSV pilot used warm loopback SSH. The deployment figures compare the worker 
 - DeepSeek Harness · [npm package metadata](https://registry.npmjs.org/@deepseek-ai/dsh/0.2.2-rc.5) · [Web server RSS report](https://github.com/deepseek-ai/deepseek-harness/discussions/13639)
 - HKUDS nanobot · [PyPI release files](https://pypi.org/project/nanobot-ai/0.4.2/#files) · [History storage](https://github.com/HKUDS/nanobot/blob/main/docs/memory.md) · [Gateway RSS profile](https://github.com/HKUDS/nanobot/issues/3410)
 - Remote execution · [Codex 0.170.0](https://github.com/openai/codex/releases/tag/rust-v0.170.0) · [DeepSeek Harness SSH subsystem](https://github.com/deepseek-ai/deepseek-harness/blob/2e39e70496aa02986ca6a820c5d497e816b69d7e/docs/subsystems/ssh.md)
+- Orlanski et al. (2026). [SlopCodeBench](https://arxiv.org/abs/2603.24755), evolving specifications and checkpoint regression tests.
